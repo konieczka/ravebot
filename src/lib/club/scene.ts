@@ -496,6 +496,8 @@ interface Frame {
 	beat: number;
 	ph: number;
 	brk: number;
+	/** Seconds since the last frame. */
+	dt: number;
 }
 
 export class ClubScene {
@@ -572,7 +574,7 @@ export class ClubScene {
 			vox: sm.vox * (i.cycle % 8 < 4 ? 1 : 0.55)
 		};
 		const hype = i.live ? i.intensity * (0.45 + (i.energy / 10) * 0.55) : 0.1;
-		const f: Frame = { i, kind, E, hype, beat, ph, brk: kind === 'breakdown' ? 1 : 0 };
+		const f: Frame = { i, kind, E, hype, beat, ph, brk: kind === 'breakdown' ? 1 : 0, dt };
 
 		const g = this.g;
 		g.globalCompositeOperation = 'source-over';
@@ -1073,7 +1075,7 @@ export class ClubScene {
 		});
 	}
 
-	private dancefloor({ i, E, hype, ph, beat, kind }: Frame) {
+	private dancefloor({ i, E, hype, ph, beat, kind, dt }: Frame) {
 		this.crowd.draw(this.g, {
 			live: i.live,
 			cycle: i.cycle,
@@ -1087,7 +1089,11 @@ export class ClubScene {
 			hype,
 			accent: i.accent,
 			breakdown: kind === 'breakdown',
-			peak: kind === 'peak'
+			peak: kind === 'peak',
+			section: i.live ? i.section : null,
+			x: i.x,
+			djMove: this.pose?.move ?? 'idle',
+			dt
 		});
 	}
 

@@ -1,3 +1,5 @@
+import type { SectionKind } from '#lib/dj/arrangement.js';
+import { pointSide, type Move as DjMove } from './moves.js';
 import { type Grid, set, toCanvas, withOutline } from './sprite.js';
 
 /**
@@ -31,6 +33,33 @@ export interface CrowdFrame {
 	accent: string;
 	breakdown: boolean;
 	peak: boolean;
+	section: SectionKind | null;
+	/** Progress through the section, 0..1. */
+	x: number;
+	/** What RaveBot is doing: the crowd follows his lead. */
+	djMove: DjMove;
+	/** Seconds since the last frame. */
+	dt: number;
+}
+
+/** What the whole floor is doing this frame. */
+interface Moment {
+	/** Bars since the drop during its first 4 bars, otherwise -1. */
+	drop: number;
+	/** Clap overhead on 2 and 4. */
+	clap: boolean;
+	/** Arms up, swaying in a ripple across the floor. */
+	ripple: boolean;
+	/** Phone flashlights up. */
+	flash: boolean;
+	/** Build progress 0..1: more hands go up as it climbs. -1 outside the build. */
+	build: number;
+	/** Hands up for everyone. */
+	allUp: boolean;
+	/** The side RaveBot points at: -1 left, 1 right, 0 none. */
+	pointed: number;
+	/** Crowd surfer's position, or null. */
+	surfer: number | null;
 }
 
 type Hair =
@@ -135,6 +164,10 @@ function pick<T>(R: () => number, list: [T, number][]): T {
 	for (const [v, w] of list) if ((n -= w) < 0) return v;
 	return list[0][0];
 }
+const hash = (n: number) => {
+	const s = Math.sin(n * 127.1 + 311.7) * 43758.5453;
+	return s - Math.floor(s);
+};
 const any = <T>(R: () => number, list: T[]) => list[Math.floor(R() * list.length)];
 
 function mix(a: string, b: string, t: number) {
@@ -214,6 +247,8 @@ interface Person {
 	lift: number;
 	/** Someone sitting on this person's shoulders. */
 	rider?: Person;
+	/** How far the arms are raised right now, 0..1 (eased towards the wanted pose). */
+	up: number;
 }
 
 /** Paints one raver, seen from behind, into a grid. Head centre at (ax, ay). */
@@ -435,7 +470,8 @@ export class Crowd {
 				rim: toCanvas(rimOf(grid, side, rimCol, r >= 9 ? 2 : 1, ay + r)),
 				lift: Math.round((R() - 0.5) * r * 0.8),
 				ax,
-				ay
+				ay,
+				up: 0
 			};
 		};
 		this.rows = ROWS.map((row, ri) => {
@@ -461,6 +497,12 @@ export class Crowd {
 	}
 
 	draw(g: Ctx, f: CrowdFrame) {
+		const m = this.moment(f);
+		const ease = (p: Person, want: number) => {
+			// Hands shoot up fast and come down slowly.
+			const rate = want > p.up ? 7 : 2.5;
+			p.up += (want - p.up) * (1 - Math.exp(-f.dt * rate));
+		};
 		this.rows.forEach((people, ri) => {
 			const row = ROWS[ri];
 			const rimA =
@@ -468,10 +510,11 @@ export class Crowd {
 				[1, 0.9, 0.8, 0.7, 0.6][ri] *
 				(f.live ? 1 : 0.3);
 			for (const p of people) {
-				const { dx, dy } = this.motion(p, f);
+				const { dx, dy } = this.motion(p, f, m);
 				const x = p.x + dx;
 				const y = row.y + p.lift + dy;
-				this.person(g, p, x, y, rimA, f);
+				ease(p, this.want(p, x, f, m));
+				this.person(g, p, x, y, rimA, f, m);
 				if (p.rider) {
 					const rr = p.rider.r;
 					const ry = y - p.r * 2.3 + (f.live ? Math.round(Math.sin(f.beat * Math.PI) * 1) : 0);
@@ -487,16 +530,66 @@ export class Crowd {
 							Math.max(2, rr * 0.6),
 							leg
 						);
-					this.person(g, p.rider, x, ry, rimA * 1.2, f);
+					ease(p.rider, f.live ? 1 : 0);
+					this.person(g, p.rider, x, ry, rimA * 1.2, f, m);
 				}
 			}
 			if (ri === 1) this.flag(g, f);
+			if (ri === 2 && m.surfer !== null) this.crowdSurfer(g, m.surfer, f, rimA);
 		});
 	}
 
-	private motion(p: Person, f: CrowdFrame) {
+	/** Reads the music and RaveBot into what the floor does together. */
+	private moment(f: CrowdFrame): Moment {
+		const bars = f.section === 'peak' ? f.x * 32 : -1;
+		const m: Moment = {
+			drop: bars >= 0 && bars < 4 ? bars : -1,
+			clap: f.djMove === 'clap',
+			ripple: f.djMove === 'wave' || (f.breakdown && f.x > 0.5),
+			flash: f.breakdown && f.x <= 0.5,
+			build: f.section === 'build' ? f.x : -1,
+			allUp: f.djMove === 'roof' || f.djMove === 'reach',
+			pointed: f.djMove === 'pointCrowd' ? pointSide(f.cycle) : 0,
+			surfer: bars >= 8 && bars < 20 ? -40 + ((bars - 8) / 12) * (480 + 80) : null
+		};
+		if (!f.live)
+			return {
+				...m,
+				drop: -1,
+				clap: false,
+				ripple: false,
+				flash: false,
+				build: -1,
+				allUp: false,
+				pointed: 0,
+				surfer: null
+			};
+		return m;
+	}
+
+	/** Whether this person wants their hands up right now. */
+	private want(p: Person, x: number, f: CrowdFrame, m: Moment) {
+		if (!f.live || p.gesture === 'none') return 0;
+		if (p.hand < 0) return 1;
+		if (m.surfer !== null && (p.row === 2 || p.row === 3) && Math.abs(x - m.surfer) < p.r * 3.5)
+			return 1;
+		// On the drop, hands fly up in a wave spreading out from the middle of the floor.
+		if (m.drop >= 0) return m.drop >= (Math.abs(x - 240) / 240) * 0.75 ? 1 : p.up;
+		if (m.flash) return p.gesture === 'phone' || p.hand < 0.2 ? 1 : 0;
+		if (m.build >= 0) return p.hand < m.build * 1.1 ? 1 : 0;
+		if (m.allUp || m.clap || m.ripple) return p.hand < f.hype + 0.35 ? 1 : 0;
+		if (m.pointed && Math.sign(x - 240) === m.pointed) return p.hand < f.hype + 0.45 ? 1 : 0;
+		// Otherwise hands come and go every couple of bars, more of them the wilder it gets.
+		const chance = f.hype * 1.05 - 0.1 + (0.5 - p.hand) * 0.5;
+		return hash(p.seed * 13.7 + Math.floor(f.cycle / 2 + p.seed)) < chance ? 1 : 0;
+	}
+
+	private motion(p: Person, f: CrowdFrame, m: Moment) {
 		if (!f.live) return { dx: 0, dy: 0 };
 		const k = 1 + p.row * 0.45;
+		// The first two bars after the drop: everybody jumps.
+		if (m.drop >= 0 && m.drop < 2)
+			return { dx: 0, dy: -Math.round(Math.sin(f.ph * Math.PI) * p.r * (0.35 + p.amp * 0.15)) };
 		const sway = Math.round(Math.sin((f.cycle * Math.PI) / 2 + p.seed) * k);
 		// Without a kick everyone sways.
 		if (f.kick < 0.3 || p.move === 'sway')
@@ -507,17 +600,67 @@ export class Crowd {
 		return { dx: 0, dy: -Math.round(hit * p.amp * (0.4 + f.hype) * k * big) };
 	}
 
-	private person(g: Ctx, p: Person, x: number, y: number, rimA: number, f: CrowdFrame) {
+	private person(g: Ctx, p: Person, x: number, y: number, rimA: number, f: CrowdFrame, m: Moment) {
 		const bx = Math.round(x - p.ax);
 		const by = Math.round(y - p.ay);
-		g.drawImage(p.body, bx, by);
-		g.globalAlpha = Math.min(1, rimA);
-		g.drawImage(p.rim, bx, by);
+		// The head moves on its own: headbangers nod on the kick, calm moments get a glance aside.
+		let nod = 0;
+		let turn = 0;
+		if (f.live) {
+			const banger = p.move === 'jump' || hash(p.seed * 5.3) < 0.25;
+			if (banger && f.kick > 0.3 && (f.peak || f.djMove === 'headbang' || f.hype > 0.75))
+				nod = f.ph < 0.25 ? Math.max(1, Math.round(p.r * 0.22)) : 0;
+			else if (f.hype < 0.45 && !m.flash && hash(p.seed * 3.1 + Math.floor(f.cycle / 4)) < 0.18)
+				turn = hash(p.seed + Math.floor(f.cycle / 4)) < 0.5 ? -1 : 1;
+		}
+		const split = Math.round(p.ay + p.r * 0.7);
+		const w = p.body.width;
+		const h = p.body.height;
+		for (const [c, a] of [
+			[p.body, 1],
+			[p.rim, Math.min(1, rimA)]
+		] as const) {
+			g.globalAlpha = a;
+			g.drawImage(c, 0, split, w, h - split, bx, by + split, w, h - split);
+			g.drawImage(c, 0, 0, w, split, bx + turn, by + nod, w, split);
+		}
 		g.globalAlpha = 1;
-		if (f.live && p.gesture !== 'none' && p.hand < f.hype * 0.95 - 0.05) this.arms(g, p, x, y, f);
+		if (f.live && p.up > 0.06) this.arms(g, p, x, y, f, m);
 	}
 
-	private arms(g: Ctx, p: Person, x: number, y: number, f: CrowdFrame) {
+	/** Someone carried across the floor on raised hands, side-on, head first, superman arms. */
+	private crowdSurfer(g: Ctx, sx: number, f: CrowdFrame, rimA: number) {
+		const x = Math.round(sx);
+		const y = ROWS[2].y - 26 + Math.round(Math.sin(f.t * 5) * 1.5);
+		const tilt = Math.round(Math.sin(f.t * 2.3));
+		const out = '#06040a';
+		const tee = '#b8b2c8';
+		const jeans = '#2e3a5c';
+		const skin = '#a8724c';
+		const shape = (c: string, grow: number) => {
+			// Legs, with sneakers.
+			line(g, x - 6, y + 1, x - 17, y + 3 + tilt, 3 + grow, c === out ? out : jeans);
+			line(g, x - 6, y - 1, x - 16, y - 3 + tilt, 3 + grow, c === out ? out : jeans);
+			// Torso and arms reaching forward.
+			for (let k = -1 - grow; k <= 4 + grow; k++)
+				px(g, x - 7 - grow, y - 2 + k - 2, 14 + grow * 2, 1, c === out ? out : tee);
+			line(g, x + 6, y - 3, x + 16, y - 6 - tilt, 2 + grow, c === out ? out : skin);
+			line(g, x + 6, y, x + 15, y - 2 - tilt, 2 + grow, c === out ? out : skin);
+			blob(g, x + 10, y - 3, 3 + grow, c === out ? out : '#2e1e14');
+		};
+		shape(out, 1);
+		shape('', 0);
+		px(g, x - 19, y + 2 + tilt, 3, 2, '#e8e4f0');
+		px(g, x - 18, y - 5 + tilt, 3, 2, '#e8e4f0');
+		px(g, x + 9, y - 1, 3, 2, skin);
+		// Stage light along their top edge.
+		g.globalAlpha = Math.min(1, rimA * 1.4);
+		px(g, x - 7, y - 5, 14, 1, mix(PINK, '#ffffff', 0.35));
+		px(g, x + 8, y - 6, 4, 1, mix(PINK, '#ffffff', 0.35));
+		g.globalAlpha = 1;
+	}
+
+	private arms(g: Ctx, p: Person, x: number, y: number, f: CrowdFrame, m: Moment) {
 		const { r, side } = p;
 		const dark = ROWS[p.row].dark;
 		const bare = p.look.top === 'tank' || p.look.top === 'harness' || p.look.top === 'mesh';
@@ -527,7 +670,13 @@ export class Crowd {
 		const w = Math.max(1, Math.round(r * 0.42));
 		const beatWave = Math.sin((f.beat * Math.PI) / 2 + p.seed);
 		const pump = f.kick * Math.exp(-((f.ph + p.ph) % 1) * 7);
+		// Raised hands are blended with hands at rest, so arms swing up and down.
+		const e = 1 - (1 - Math.min(1, p.up)) ** 2;
 		const arm = (s: number, hx: number, hy: number) => {
+			const rx = x + s * r * 1.2;
+			const ry = y + r * 1.8;
+			hx = rx + (hx - rx) * e;
+			hy = ry + (hy - ry) * e;
 			line(g, x + s * r * 1.05, y + r * 1.25, hx, hy + w, w, sleeve);
 			return [hx, hy] as const;
 		};
@@ -547,6 +696,45 @@ export class Crowd {
 			g.globalCompositeOperation = 'source-over';
 		};
 		const hy0 = y - r * 2.3 - pump * r * 0.3;
+		const props =
+			p.gesture === 'phone' || p.gesture === 'fan' || p.gesture === 'glow' || p.gesture === 'heart';
+
+		// Shared moments override personal gestures (props stay in hand).
+		if (m.surfer !== null && Math.abs(x - m.surfer) < r * 3.5 && (p.row === 2 || p.row === 3)) {
+			for (const s of [-1, 1]) {
+				const [hx, hy] = arm(
+					s,
+					x + (m.surfer - x) * 0.4 + s * r * 0.5,
+					Math.max(y - r * 2.7, ROWS[2].y - 22)
+				);
+				fist(hx, hy);
+			}
+			return;
+		}
+		if (m.clap && !props) {
+			const hit = Math.floor(f.beat) % 2 === 1 ? Math.exp(-f.ph * 6) : 0;
+			const gap = r * (0.35 + 0.9 * (1 - hit));
+			for (const s of [-1, 1]) fist(...arm(s, x + s * gap, y - r * 2.5));
+			return;
+		}
+		if (m.ripple && !props) {
+			// A slow wave rolling across the floor.
+			const o = Math.sin((f.beat * Math.PI) / 4 - x * 0.03) * r * 0.9;
+			for (const s of [-1, 1]) {
+				const [hx, hy] = arm(s, x + s * r * 0.9 + o, y - r * 2.4);
+				fist(hx, hy);
+				band(hx, hy);
+			}
+			return;
+		}
+		if (m.drop >= 0 && !props) {
+			for (const s of [-1, 1]) {
+				const [hx, hy] = arm(s, x + s * r * 1.3, hy0 - r * 0.3);
+				fist(hx, hy);
+				band(hx, hy);
+			}
+			return;
+		}
 
 		switch (p.gesture) {
 			case 'two': {
@@ -559,6 +747,7 @@ export class Crowd {
 			}
 			case 'heart': {
 				for (const s of [-1, 1]) arm(s, x + s * r * 0.45, y - r * 2.1);
+				if (e < 0.9) break;
 				const k = Math.max(1, Math.round(r / 6));
 				const shape = ['.x.x.', 'xxxxx', '.xxx.', '..x..'];
 				shape.forEach((row, j) =>
@@ -575,10 +764,20 @@ export class Crowd {
 				const phh = Math.max(3, Math.round(r * 0.75));
 				px(g, hx - pw / 2 - 1, hy - phh - 1, pw + 2, phh + 2, '#050307');
 				px(g, hx - pw / 2, hy - phh, pw, phh, '#dfe8ff');
-				if (r >= 7) px(g, hx - pw / 2, hy - phh * 0.5, pw, 1, PINK);
+				if (r >= 7 && !m.flash) px(g, hx - pw / 2, hy - phh * 0.5, pw, 1, PINK);
 				g.globalCompositeOperation = 'lighter';
 				g.globalAlpha = 0.18;
 				px(g, hx - pw * 1.5, hy - phh * 1.6, pw * 3, phh * 2.2, '#dfe8ff');
+				// In the breakdown the flashlights come on.
+				if (m.flash) {
+					const flick = 0.75 + 0.25 * Math.sin(f.t * 2 + p.seed);
+					g.globalAlpha = 0.1 * flick;
+					blob(g, hx, hy - phh, Math.max(2, Math.round(r * 0.9)), '#fff1c8');
+					g.globalAlpha = 0.22 * flick;
+					blob(g, hx, hy - phh, Math.max(1, Math.round(r * 0.45)), '#fff1c8');
+					g.globalAlpha = 1;
+					px(g, hx - 1, hy - phh, 2, 2, '#ffffff');
+				}
 				g.globalAlpha = 1;
 				g.globalCompositeOperation = 'source-over';
 				fist(hx, hy);

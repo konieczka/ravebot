@@ -106,6 +106,9 @@ const hash = (n: number) => {
 };
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 
+/** Which side of the floor RaveBot points at: he switches arms every two bars. */
+export const pointSide = (cycle: number): -1 | 1 => (Math.floor(cycle / 2) % 2 ? 1 : -1);
+
 /** Picks the move for a phrase: the best heat match, with a little randomness, never the same twice in a row. */
 export function pickMove(i: MoveInput): Move {
 	if (!i.live || !i.section) return 'idle';
@@ -191,7 +194,7 @@ export function choreograph(i: MoveInput): Pose {
 		}
 		case 'pointCrowd': {
 			// Points out at the crowd, switching arms every two bars.
-			const side = Math.floor(i.cycle / 2) % 2 ? 1 : -1;
+			const side = pointSide(i.cycle);
 			const arm: Arm = {
 				hand: [CX + side * 45, 104 + (ph < 0.2 ? 1 : 0)],
 				elbow: [CX + side * 31, 108],
