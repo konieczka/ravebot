@@ -1,4 +1,5 @@
-import { chooseHarmony, parseHarmony } from '#lib/dj/harmony.js';
+import { copiedMotif, repairTrackLayers } from '#lib/dj/repair.js';
+import { chooseTrackHarmony, parseHarmony } from '#lib/dj/harmony.js';
 import { json } from '@sveltejs/kit';
 import {
 	CF_ACCOUNT_ID,
@@ -20,10 +21,7 @@ import { TRACK_SCHEMA, buildMessages, extractJson } from '#lib/server/prompt.js'
 import type { RequestHandler } from './$types';
 
 const MAX_ATTEMPTS = 3;
-/** A track counts as a copy when this many non-kick layers match the example or the previous track. */
-const MAX_COPIED_LAYERS = 2;
-
-const SEED_LAYERS = new Set(GENRES.flatMap((g) => g.seeds.flatMap((s) => Object.values(s.layers))));
+const SEED_TRACKS = GENRES.flatMap((g) => g.seeds.map((s) => s.layers));
 const SEED_TITLES = new Set(GENRES.flatMap((g) => g.seeds.map((s) => s.title.toLowerCase())));
 
 /** Optional request fields; a provider that rejects one gets it dropped for the rest of the session. */
@@ -59,27 +57,8 @@ function parseRequest(body: any): GenerateRequest | null {
 			layers: Object.fromEntries(LAYERS.map((l) => [l, layers[l] ?? 'silence'])) as Layers
 		};
 	}
-	if (req.genre === 'french') req.harmony = chooseHarmony(req.previous?.harmony);
+	req.harmony = chooseTrackHarmony(req.genre, req.previous?.harmony);
 	return req;
-}
-
-const DEFAULT_LAYERS: Layers = {
-	kick: "s('bd*4').bank('RolandTR909')",
-	hats: 'silence',
-	perc: 'silence',
-	bass: 'silence',
-	synth: 'silence',
-	vox: 'silence'
-};
-
-/** Non-kick layers that are verbatim copies of a seed track or of the previous track. */
-function copiedLayers(layers: Layers, previous?: Layers): LayerName[] {
-	return LAYERS.filter(
-		(l) =>
-			l !== 'kick' &&
-			layers[l] !== 'silence' &&
-			(SEED_LAYERS.has(layers[l]) || layers[l] === previous?.[l])
-	);
 }
 
 async function chat(messages: ChatMessage[], temperature: number): Promise<string> {
@@ -150,7 +129,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		});
 
 	const messages: ChatMessage[] = buildMessages(req);
-	const temperature = 0.5 + req.weirdness * 0.06;
+	// Musical variety is explicit in the plan; high weirdness must not reduce code reliability.
+	const temperature = 0.45;
 	let lastError = 'unknown error';
 
 	for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
@@ -174,6 +154,8 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		const { layers, errors } = validateLayers(parsed?.layers);
+		if (layers.bass === 'silence')
+			errors.bass = 'bass must be present and follow the supplied rhythm';
 		const failed = Object.keys(errors) as LayerName[];
 		const isLastAttempt = attempt === MAX_ATTEMPTS - 1;
 
@@ -191,36 +173,36 @@ export const POST: RequestHandler = async ({ request }) => {
 		}
 
 		if (!failed.length && !isLastAttempt) {
-			const copied = copiedLayers(layers as Layers, req.previous?.layers);
-			if (
-				copied.length >= MAX_COPIED_LAYERS ||
-				SEED_TITLES.has(String(parsed.title).toLowerCase())
-			) {
-				lastError = `copied ${copied.join(', ') || 'title'}`;
+			const copied = copiedMotif(layers as Layers, [
+				...SEED_TRACKS,
+				...(req.previous ? [req.previous.layers] : [])
+			]);
+			if (copied || SEED_TITLES.has(String(parsed.title).toLowerCase())) {
+				lastError = copied ? 'copied foreground motif' : 'copied title';
 				console.warn(`[generate] attempt ${attempt + 1} ${lastError}`);
 				messages.push(
 					{ role: 'assistant', content: reply },
 					{
 						role: 'user',
-						content: `This copies existing patterns (${copied.join(', ') || 'the title'}). Write NEW patterns for ${copied.join(', ') || 'the track'} with different notes and rhythms, a new title, and return the full JSON object again.`
+						content: `This repeats ${copied ? 'the foreground motif' : 'an existing title'}. ${copied ? 'Write a new foreground motif or phrasing within the SAME harmonic and rhythm contracts. Standard drums and bass grooves may remain.' : 'Change only the title.'} Return the full JSON object.`
 					}
 				);
 				continue;
 			}
 		}
 
-		// Last attempt: patch broken layers instead of throwing the whole track away.
-		for (const l of failed) layers[l] = req.previous?.layers[l] ?? DEFAULT_LAYERS[l];
+		// Repair all pitched parts together; never import a single previous-track melody.
+		const repaired = repairTrackLayers(req.genre, layers, failed, req.harmony);
 
 		return json({
 			ok: true,
-			repaired: failed,
+			repaired: repaired.repaired,
 			attempts: attempt + 1,
 			track: {
 				title: String(parsed.title || 'Untitled Banger').slice(0, 60),
 				comment: String(parsed.comment || '').slice(0, 120),
-				layers: layers as Layers,
-				harmony: req.harmony
+				layers: repaired.layers,
+				harmony: repaired.harmony
 			}
 		} satisfies GenerateResponse);
 	}

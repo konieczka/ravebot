@@ -1,4 +1,4 @@
-import { FRENCH_HARMONIES, type HarmonyId } from '../harmony';
+import { FRENCH_HARMONIES, type FrenchHarmonyId } from '../harmony';
 import type { Seed } from './types';
 
 // Original, replayable disco phrases. Chords, bass and hook share the same bar grid;
@@ -24,7 +24,7 @@ const octave = (note: string, shift: number) =>
 	note.replace(/\d$/, (n) => String(Number(n) + shift));
 const phrase = (bars: string[]) => `<${bars.map((b) => `[${b}]`).join(' ')}>`;
 
-function makeSeed(harmony: HarmonyId, variation: number, title: string): Seed {
+function makeSeed(harmony: FrenchHarmonyId, variation: number, title: string): Seed {
 	const { roots, chords } = FRENCH_HARMONIES[harmony];
 	const keyboard = phrase(
 		chords.map((notes) => {
@@ -79,6 +79,6 @@ function makeSeed(harmony: HarmonyId, variation: number, title: string): Seed {
 	};
 }
 
-export const FRENCH: Seed[] = (Object.keys(FRENCH_HARMONIES) as HarmonyId[]).flatMap(
+export const FRENCH: Seed[] = (Object.keys(FRENCH_HARMONIES) as FrenchHarmonyId[]).flatMap(
 	(harmony, index) => [0, 1, 2].map((v) => makeSeed(harmony, v, TITLES[index * 3 + v]))
 );

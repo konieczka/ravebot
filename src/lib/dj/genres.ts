@@ -35,7 +35,7 @@ export interface Genre {
 	 * Sub-styles (producer lineages) the LLM is given one of per track, so a set does not repeat
 	 * one idea. The last one is the experimental pick, favoured at high weirdness.
 	 */
-	styles: { name: string; recipe: string }[];
+	styles: { name: string; recipe: string; minWeirdness: number }[];
 	/** Modes the LLM may write in (one is picked per track). Defaults to minor. */
 	modes?: string[];
 	/** How tracks of this genre build up and drop (see arrangement.ts). */
@@ -62,34 +62,46 @@ export const GENRES: Genre[] = [
 			"Berlin minimal / microhouse (Perlon, M_nus, Kompakt, Raster-Noton). Space and silence matter more than density: dry tight 909/707 drums, clicky rims and shakers, small toms pitched with .speed(). Rubbery short basses (sine, pulse or triangle plucks with .lpf(...).lpenv(3).lpa(.005).lpd(.1), or a ladder low-pass with low-to-mid resonance). Sparse filtered blips, PWM pulse fragments, tiny FM pings with a short fmdecay. Movement comes from micro-variation over long stretches: degradeBy/sometimesBy, slow perlin filter drift, '<...>' changes every 4-16 bars, arc slowly opening one filter. Keep the kick dry: the engine adds a light sub rumble from it.",
 		styles: [
 			{
-				name: 'Plastikman',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					"a low 16th 303 hum through one ladder filter (.ftype('ladder').lpq(10-14).drive(.5)) that opens very slowly with arc and perlin, cavernous rim and clap in a big dark room (.roomsize(6)), almost nothing else"
+					'Dry sparse drums, a short repeating bass motif and one quiet chord answer; space is part of the groove.'
+			},
+			{
+				name: 'Plastikman',
+				minWeirdness: 0,
+				recipe:
+					'A restrained resonant acid bass, dry sparse drums and one dark rim echo; move cutoff slowly.'
 			},
 			{
 				name: 'Villalobos',
+				minWeirdness: 7,
 				recipe:
-					'long wandering 808 percussion polyrhythms: odd euclids like mt(5,12) and lt(3,11), rims on a 10-step polymeter with per-bar .speed(), perlin-gained shakers, wooden FM marimba pings answered by a fifth with .off(3/16, ...); loose and humid'
+					'Warm wooden percussion and rubbery bass; one quiet percussion polymeter supplies the only rhythmic experiment.'
 			},
 			{
 				name: 'Robert Hood',
+				minWeirdness: 0,
 				recipe:
-					'one minor 7th chord stab on every off-beat (sawtooth, .lpenv pluck) into a dotted-8th delay, driving accented 16th hats, a PWM pulse bass; relentless and functional'
+					'One repeated minor chord stab, accented hats and a short pulse bass; keep the hook minimal.'
 			},
 			{
 				name: 'Perlon skippy funk',
+				minWeirdness: 7,
 				recipe:
-					'bouncy, off-grid: percussion on 7- and 12-step polymeters, an occasional skipped extra kick, a rubbery ladder bass with lpenv on a 13-step polymeter, PWM two-note stabs in call and response over 4 bars'
+					'A playful pulse motif and dry clicky percussion; keep bass on its grid and use one supporting percussion variation.'
 			},
 			{
 				name: 'dub-minimal',
+				minWeirdness: 0,
 				recipe:
-					'echoing pulse blips and a minor 7th dub stab in long delays (.delayfeedback(.7)) and a dark room, deep sine bass, a rim and tom sent into the echoes'
+					'Quiet pulse blips, sparse chord stabs and a deep sine bass with restrained dark echoes.'
 			},
 			{
 				name: 'click-house (experimental)',
+				minWeirdness: 9,
 				recipe:
-					"micro-clicks from crushed or coarse rims and claps pitched up 1.5-2.5x, white-noise .coarse() blips, stuttered PWM fragments with .ply('<1 1 2 1 1 3 1 2>'), speech chopped with .chop(6).degradeBy(.4)"
+					'Crushed rim texture and short PWM fragments; one supporting percussion fill, a stable bass and hook.'
 			}
 		],
 		arc: {
@@ -111,34 +123,46 @@ export const GENRES: Genre[] = [
 			"The Roland TB-303 and everything it spawned. The 303 line is the heart: a 16-step sawtooth or square pattern with rests, octave jumps, chromatic passing notes and accents written as a gain pattern (.gain('.55 .4 .4 .6')), through .ftype('ladder') with high resonance (lpq 12-22), a snappy filter envelope (.lpenv(2-6).lpa(.005).lpd(.1-.2)) and .drive(.6). The tweak is everything: ride cutoff with arc, wander resonance and envelope depth on slow perlin/sine, add .sometimesBy(.15, x => x.add(note(12))). Punchy 909 (or 808) drums, open hats on the off-beat, clap fills with lastOf + ply, rides in some. The synth layer supports in the same key: a second acid line, minor or sus chord stabs, a hoover or a pad. Never ladder a chordal 16th part (CPU).",
 		styles: [
 			{
-				name: 'Phuture "Acid Tracks"',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					'raw Chicago jack: a two-bar 16-step 303 riff with rests and a chromatic note, cutoff on arc, resonance on slow perlin, envelope depth on sine; a pulse chord stab with PWM on top'
+					'One repeating acid bass motif with rests; move its filter slowly. A sparse chord stab supports it.'
+			},
+			{
+				name: 'Phuture "Acid Tracks"',
+				minWeirdness: 0,
+				recipe:
+					'A repeating sawtooth bass with rests, filter-envelope accents and a slowly opening resonant filter; sparse chord support.'
 			},
 			{
 				name: 'Hardfloor',
+				minWeirdness: 7,
 				recipe:
-					'two interlocking 303s: the bass box in 16 steps, a second laddered box in the synth layer an octave up on an 11-step polymeter ({...}%16) with a slow phaser; rides come in with arc'
+					'One foreground acid bass with a quiet answering synth; both follow the same harmony and four-bar grid.'
 			},
 			{
 				name: 'Josh Wink',
+				minWeirdness: 7,
 				recipe:
-					'one relentless 16th line whose cutoff climbs ~150 -> 4000 Hz and resonance 14 -> 23 with arc, light distort, and a screaming bar every 16 (.lastOf(16, x => x.lpq(25))); a minor supersaw pad underneath'
+					'A repeating resonant bass motif whose cutoff rises slowly; restrained supporting chords.'
 			},
 			{
 				name: 'London acid techno',
+				minWeirdness: 0,
 				recipe:
-					'a distorted 303 whose .distort grows with arc, hard 909 with .shape(.4), bitcrushed square chord stabs on the off-beats, clap rolls every 8 bars, rave shouts'
+					'Firm drums, a lightly distorted acid bass and short square chord stabs; preserve the repeated motif.'
 			},
 			{
 				name: 'Plastikman minimal acid',
+				minWeirdness: 0,
 				recipe:
-					'a sparse rest-heavy 303 under a nearly closed filter (perlin 200-650 Hz, lpq 20), euclidean 808 rims dripping into a dark long reverb and a dotted-8th delay, a slow triangle pad'
+					'A sparse acid motif under a nearly closed filter, quiet rim echoes and a soft triangle pad.'
 			},
 			{
 				name: 'Vibert / Ceephax (experimental)',
+				minWeirdness: 9,
 				recipe:
-					'a playful melodic dorian 303 written as scale degrees with random .penv zaps, supersaw seventh chords with a PWM pulse arpeggio, 808 cowbell and toms, speakspell and bleeps'
+					'Playful rounded acid timbre, short pulse answers and a sparse robot shot; one quiet percussion experiment.'
 			}
 		],
 		arc: {
@@ -161,34 +185,44 @@ export const GENRES: Genre[] = [
 			"Hard techno: relentless, distorted and industrial, locked to a nearly straight grid. A punchy saturated kick (909/808 with .shape(.4-.7), maybe a touch of .distort or .lpf), kept dry with no room: the engine adds a heavy distorted sub rumble from it. An off-beat or rolling sub ('[~ x]*4' or '[~ x x x]*4', short decay) through a ladder filter with drive, or FM grit, leaving room for kick and rumble. Claps and snares with room and .crush(), tom rolls, 16th hats. Synths: harsh distorted stabs with hpf, screaming hoovers, detuned supersaws (.unison(5-7).spread(.8)), FM metal (non-integer .fmh like 1.41 or 3.5), white/pink noise risers swept with hpf. arc opens filters and distortion; lastOf fills; '<...>' variations every 4 bars.",
 		styles: [
 			{
-				name: 'schranz',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					'looped hammering percussion: euclid tom rolls on lt/mt/ht, 16th hats whose .crush() harshens with arc, a rolling ladder sub, a looped FM metal hammer (square, .fmh(1.41), distort), little melody'
+					'Firm four-on-the-floor kick, short off-beat bass and one repeated dark stab; intensity comes from accents and tone.'
+			},
+			{
+				name: 'schranz',
+				minWeirdness: 7,
+				recipe:
+					'Firm distorted drums and dry repeated stabs, with short stable bass notes and a clear rhythmic anchor.'
 			},
 			{
 				name: 'Berghain industrial',
+				minWeirdness: 7,
 				recipe:
-					'crushed and coarse claps, snares and cowbells with per-bar coarse amounts, FM grit bass, grinding crushed white noise under a clangorous FM stab (.fmh(3.5)) in a dark long reverb, dark speech with long delay'
+					'Dark noisy synth texture behind a simple repeated motif, short bass and firm drums.'
 			},
 			{
 				name: 'rave-hard',
-				recipe:
-					'emotional detuned supersaw chords (minor i-VI-III-VII) in a syncopated stab rhythm with a white-noise riser stacked in the synth layer, a ladder bass on the chord roots, rave shouts and hoovers'
+				minWeirdness: 7,
+				recipe: 'Bright restrained saw chords and a sparse rave shout over a steady kick and bass.'
 			},
 			{
 				name: 'acid-hard',
-				recipe:
-					'a two-bar 16th 303 on a ladder with lpenv and .drive(1.2), resonance rising 10 -> 22 with arc, a short pulse off-beat roll as the bass'
+				minWeirdness: 7,
+				recipe: 'A resonant acid motif with firm drums and a short supporting chord answer.'
 			},
 			{
 				name: 'hard-groove',
+				minWeirdness: 7,
 				recipe:
-					"funky looped 808 cowbell, tom and clap percussion, shaker euclids, a funky 16th bass resting on the beat, PWM pulse stabs with a phaser, a 'give it' / 'our crew' chant"
+					'Accented tom percussion over a steady kick and short bass; one supporting percussion line may experiment.'
 			},
 			{
 				name: 'neo-trance hard (experimental)',
+				minWeirdness: 9,
 				recipe:
-					"a wide supersaw arpeggio (.unison(7).spread(1)) over a minor progression with an octave echo via .off(3/16, ...), a stacked sine sub + high-passed saw bass, a vowel-filtered pulse 'voice' singing a 16-bar melody"
+					'A clear wide saw hook and a soft pulse answer; shared harmony, stable bass and no pitch effects.'
 			}
 		],
 		arc: {
@@ -221,34 +255,46 @@ export const GENRES: Genre[] = [
 			"Dub techno (Basic Channel, Maurizio, Rhythm & Sound, Deepchord, Echospace, Monolake, Porter Ricks). The chord stab is the soul: minor 7th, minor 9th or sus chords on sawtooth (or saw + square/pulse), hollowed with hpf 200-300 or bpf, a resonant low-pass wandering on slow perlin, short decay, drenched in delay (.delay(.5-.75).delaytime(.375) or unsynced like .264, .delayfeedback(.6-.85)) and a big dark reverb (.roomsize(4-8).roomlp(2000-4000)). Add .noise(.04) for tape grit. Chords barely move: one chord for 4-8 bars or a two-chord sway in '<...>'. A warm steady sine/triangle sub, never busy. Soft understated drums: a low-passed kick, quiet shuffled hats with perlin gain, rims, shakers, a muffled clap in room. Texture: very quiet pink-noise hiss or crushed white-noise crackle stacked in the synth layer. The engine darkens echo repeats like a tape delay.",
 		styles: [
 			{
-				name: 'Basic Channel',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					"one hypnotic chord stab that only changes on bar 8 of each phrase ('<chord!7 other>'), an octave-up square layered with .superimpose, cutoff on perlin, feedback climbing .62 -> .8 with arc"
+					'One warm sustained tonal centre, sparse chord stabs and a steady sub; restrained dark echoes.'
+			},
+			{
+				name: 'Basic Channel',
+				minWeirdness: 0,
+				recipe:
+					'Sparse warm chord stabs on the supplied harmonic grid, quiet drums and restrained dark echo.'
 			},
 			{
 				name: 'Rhythm & Sound',
+				minWeirdness: 0,
 				recipe:
-					'reggae dub: off-beat square skank chords high-passed at 400 over a i-i-iv-v minor 7th progression, a melodic roots bass (sine sub + pulse top via .layer), a one-drop clap on beat 3, a toaster-style vowel chant'
+					'Off-beat square chord skanks, a warm root-focused bass and a sparse vowel chant in the supplied harmony.'
 			},
 			{
 				name: 'Deepchord / Echospace',
+				minWeirdness: 0,
 				recipe:
-					'oceanic fog: an add9 chord held 4 bars then two others, band-passed and drowned in an unsynced .264 s delay at .85 feedback and an 8-size reverb darkened to 2500 Hz, pink haze and crackle underneath'
+					'Soft sustained chord colour with quiet filtered noise, a steady sub and gentle dark echoes.'
 			},
 			{
 				name: 'Monolake',
+				minWeirdness: 7,
 				recipe:
-					'cold and precise: pulse chords on a 5-step polymeter, FM metallic clicks on a 7-step one, rims and cowbell polymeters with panning, a tight kick, a sparse FM bell in 16th delay'
+					'Cold pulse chords and one quiet metallic percussion motif; keep the main chord rhythm and bass stable.'
 			},
 			{
 				name: 'Porter Ricks',
+				minWeirdness: 7,
 				recipe:
-					'submerged: chords on a 5-in-16 euclid through a ladder low-pass held nearly closed (250-900 Hz) and wobbled by fast perlin, resonance 10-18 rising with arc, bubbling swept pink noise'
+					'Low filtered chord stabs, subtle noise and one quiet syncopated percussion part; steady bass.'
 			},
 			{
 				name: 'melodica dub (experimental)',
+				minWeirdness: 9,
 				recipe:
-					'PWM pulse chords on a 7-step polymeter, FM bells (.fmh(3.5)) answering in the same echo, an 11-step broken bass, a melodica-like pulse phrase with vibrato on bars 3-4 of every 8'
+					'A gently vibrating pulse answer over warm chords, stable bass and one supporting percussion experiment.'
 			}
 		],
 		// Dub swells and recedes: no roll, no gap, no impact.
@@ -281,34 +327,46 @@ export const GENRES: Genre[] = [
 			"Detroit techno: soulful, futuristic machine music. Crisp 909 hats and rides, an 808 clap and cowbell, congas from pitched toms. Funky syncopated basses (pulse with .pw, sawtooth with lpenv, octave jumps, notes off the beat). Real harmony matters most: write voice-led progressions of minor 9th, 11th and maj7 chords in '<...>' (e.g. Cm9 -> Fm9 -> Bbmaj7 -> Ebmaj7), lush supersaw pads (.unison(7).spread(.9), attack .3-.6, long release) or syncopated string stabs, Rhodes-like FM keys (sine, .fm(1.5).fmh(1) with fmdecay), arps echoed with .off(). Call-and-response melodies over 2-4 bars. Hopeful minor-to-major colour (dorian especially). The engine already swings the hats and perc by 57%, so don't add swingBy.",
 		styles: [
 			{
-				name: 'Derrick May "Strings of Life"',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					'syncopated supersaw string stabs (.attack(.005), short decay) on a dramatic progression like Em9 -> Cmaj9 -> Am7 -> B7, two stab rhythms alternating per bar and doubling at phrase end, a 16th lpenv saw bass with octave jumps'
+					'Close chord voicings on the supplied progression, a syncopated bass and a simple two-bar melodic answer.'
+			},
+			{
+				name: 'Derrick May "Strings of Life"',
+				minWeirdness: 7,
+				recipe:
+					'Syncopated string-like saw chords with a two-bar answer and a short bass following the supplied roots.'
 			},
 			{
 				name: 'Model 500 electro',
+				minWeirdness: 7,
 				recipe:
-					"a broken 808 electro kick ('bd ~ ~ bd ~ ~ bd ~') with fills, 808 cowbell and clap, a funky PWM pulse bass, a square sci-fi arp with a 3/16 octave echo and auto-pan, speakspell robot phrases"
+					'Dry 808 colours, a funky pulse bass on the supplied groove and a short square sci-fi answer with sparse robot speech.'
 			},
 			{
 				name: 'UR / Hi-Tech Jazz',
+				minWeirdness: 7,
 				recipe:
-					'an 8-bar voice-led jazz progression (m9, 13, maj9, m7b5, 7sus, 7b9), syncopated saw comping under a soaring vibrato saw lead written against the chords, a ride-driven groove, a ladder saw bass'
+					'Warm FM keys with close voicings and a short singable answer over the supplied progression.'
 			},
 			{
 				name: 'Carl Craig',
+				minWeirdness: 0,
 				recipe:
-					'a lush cinematic supersaw pad (.unison(7).spread(.9).attack(.5).release(2)) whose filter sweeps over 32 bars with common tones held, an FM pluck fading in with arc, an off-beat sine sub + high-passed saw'
+					'Warm sustained saw chords with a slow filter sweep and a quiet plucked answer; root-focused bass.'
 			},
 			{
 				name: 'Kenny Larkin jazz-house',
+				minWeirdness: 0,
 				recipe:
-					'Rhodes FM keys comping m9 -> 13 -> maj9 -> maj7 with auto-pan, pitched 808 toms as congas, one funky saw bass pattern transposed to each chord root'
+					'Warm sine FM keys, gentle panning and syncopated bass following the supplied roots.'
 			},
 			{
 				name: 'Drexciya (experimental)',
+				minWeirdness: 9,
 				recipe:
-					'aquatic electro: a broken kick with a long 808 boom, a self-resonant ladder pulse bass with drive, a mysterious vibrato triangle melody, FM bubbles (.fmh(3.5), .penv zaps, random pan) on a 5-step polymeter'
+					'Aquatic filtered pulse and triangle colours with a short mysterious hook; one supporting percussion experiment.'
 			}
 		],
 		arc: {
@@ -338,34 +396,45 @@ export const GENRES: Genre[] = [
 			'Hypnotic techno (Donato Dozzy, Rrose, Voices From The Lake, Oscar Mulero, Peter Van Hoesen, Neel). Loops that barely change and pull you under: evolution comes from slow modulation over 16-64 bars (.slow(32), .slow(64), perlin), not from new riffs. Rolling tom polyrhythms (euclid lt/mt/ht, {...}%16 polymeters drifting against the kick, pitched with .speed), droning or pulsing basses (low ladder filter with slow resonance movement, pulse with slowly modulated .pw, a sine sub + gritty top), swirling textures (filtered noise with slow bpf/hpf sweeps, FM metallic shimmer with non-integer .fmh, short motifs fed into long delays at .6-.8 feedback until they smear, slow-attack pads in .roomsize(6-8)). Stereo motion with pan(sine.slow(n)), jux, off. Keep the kick dry: the engine adds a strong sub rumble from it.',
 		styles: [
 			{
-				name: 'Dozzy / VFTL',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					"aquatic: a 7-step FM sine arpeggio ({..}%16, .fmh(2.01)) with FM depth drifting over 32 bars, an octave echo into a long delay and a slow pan, a sine sub + PWM top rolling '[~ x x ~]'"
+					'Repeat a short tonal motif over a steady bass and kick; evolve one filter slowly and keep percussion sparse.'
+			},
+			{
+				name: 'Dozzy / VFTL',
+				minWeirdness: 7,
+				recipe:
+					'Repeat a short soft FM motif, move one filter over many bars and keep a quiet steady bass.'
 			},
 			{
 				name: 'Rrose',
+				minWeirdness: 7,
 				recipe:
-					'droning and resonant: a 16th ladder saw roll with cutoff over 32 bars and lpq wandering 6-18 on perlin, a resonant supersaw cluster turning every 4 bars, FM shimmer (.fmh(1.414)), a slow vowel drone'
+					'A slowly evolving resonant motif over the supplied tonal centre, with restrained soft noise and steady bass.'
 			},
 			{
 				name: 'Mulero / Semantica',
-				recipe:
-					'dark rolling industrial: a ladder saw roll with lpenv and drive opening with arc, white noise through a slow band-pass under answering square-FM dyads (.fmh(3.53)) with dub delay, detuned tom polymeters'
+				minWeirdness: 7,
+				recipe: 'A dark repeated bass motif with quiet square chord answers and filtered noise.'
 			},
 			{
 				name: 'Peter Van Hoesen',
+				minWeirdness: 7,
 				recipe:
-					'precise and metallic: a 9-step FM pluck (.fmh(3.17)) through jux(rev), pitched-up 707 rim, cowbell and tom polymeters with iter fills, a sine sub + PWM top on a 5-step polymeter'
+					'Precise short pulse notes over steady bass; one quiet percussion polymeter creates movement.'
 			},
 			{
 				name: 'tribal',
+				minWeirdness: 0,
 				recipe:
-					'drums lead: five 808 tom, cowbell and perc lines pitched like congas across the stereo field, a slow-attack supersaw pad, a 2-bar call-and-response motif in high delay feedback'
+					'Accented toms and a quiet sustained pad with one short melodic answer; keep space between parts.'
 			},
 			{
 				name: 'polymetric web (experimental)',
+				minWeirdness: 9,
 				recipe:
-					'every layer on its own cycle length: 4/4 kick, a 3-step hat loop against hh(5,7), 5/7/11-step perc, a 9-step bass, a 5-step PWM pulse against a 7-step FM line, a 7-bar vox cycle'
+					'One quiet percussion polymeter against a stable kick, bass and repeated pulse motif; all pitched parts share the four-bar plan.'
 			}
 		],
 		arc: {
@@ -387,32 +456,44 @@ export const GENRES: Genre[] = [
 			'French touch, Discovery-era warmth and filter disco. Build an original four-bar musical loop that feels played and resampled: closely voiced extended chords, syncopated attacks alternating with held notes, a rounded bass groove and a sparse singable response. Repetition is the hook; evolve the filter and arrangement, keep the melody recognizable. The bass, keys and voice share the supplied harmonic contract. Use warm electric piano, restrained saw chords or rounded pulse guitar colors. Avoid default arpeggios, continuous octave bass, tiny zero-sustain stabs and excessive detuned supersaws. A steady 909, claps on 2 and 4, lightly swung hats. The engine processes bass and keys together and supplies the pump; vowel-filtered synths are optional robotic color, not a required imitation of vocals.',
 		styles: [
 			{
+				name: 'classic groove',
+				minWeirdness: 0,
+				recipe:
+					'A repeating four-bar keyboard loop, rounded bass and a short singable answer following the supplied harmony.'
+			},
+			{
 				name: 'Daft Punk "Discovery"',
+				minWeirdness: 0,
 				recipe:
 					'warm sustained seventh/ninth keyboard voicings with two syncopated attacks per bar, a rounded syncopated bass and a held four-bar robotic answer'
 			},
 			{
 				name: 'Daft Punk "Homework"',
+				minWeirdness: 0,
 				recipe:
 					'raw 909 drums, a memorable restrained saw bass riff with space between notes, close pulse chord voicings and a sparse robot answer'
 			},
 			{
 				name: 'Stardust / Modjo',
+				minWeirdness: 0,
 				recipe:
 					'a repeating ninth-chord keyboard phrase following the supplied four-bar grid, a few guitar-like pulse accents, syncopated bass with occasional octaves and a breathy robotic answer; shared filter handled by the engine'
 			},
 			{
 				name: 'Cassius / Bob Sinclar',
+				minWeirdness: 0,
 				recipe:
 					'rounded brass chords with held notes, FM piano (.fm(1.5).fmh(1)) answering in the second half of the phrase, a sparse robotic voice; leave room for the shared filter'
 			},
 			{
 				name: 'Alan Braxe & Fred Falke',
+				minWeirdness: 0,
 				recipe:
 					'a warm nostalgic electric-piano loop with close ninth voicings, soft 707 drums, a rounded syncopated bass and a dreamy slow-attack robotic answer'
 			},
 			{
 				name: 'Roule glitch (experimental)',
+				minWeirdness: 9,
 				recipe:
 					'a disco loop with one short repeated chord answer on bar four, steady harmony and bass, crunchy percussion and a sparse speakspell shot; keep the core phrase intact'
 			}
@@ -455,34 +536,46 @@ export const GENRES: Genre[] = [
 			"Psytrance in all its colours. The foundation is the KBBB: a short tight kick on every beat (bd with .decay(.15).sustain(0)) locked with a rolling bass of three 16ths after each kick ('[~ e1 e1 e1]*4'), decay under .08 and never on the kick, through a ladder low-pass with lpenv for the knock; vary its timbre (saw, pulse, FM, square with .noise) and move it with arc. Fast 16th hats, off-beat open hats, sparse snares and claps, rides. On top: acid squelches (ladder, high lpq), gated 16th synths (struct/mask with euclids), FM blips and laser zaps (.penv(12-36).pdecay(.05)), vowel chatter, long synced delays and wide panning (pan(sine.fast(2)), jux(rev)). Eastern scales: phrygian, phrygian dominant, harmonic minor. Something mutates every 8 bars ('<...>', lastOf(8, ...), iter). Sci-fi speech samples, sparse.",
 		styles: [
 			{
-				name: 'full-on',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					'a 4-bar call-and-response supersaw melody in harmonic minor with an FM laser zap layer (.penv(24)) thickening with arc, a ladder KBBB bass that walks down in bar 4, crashes marking each phrase'
+					'Short kick with three short bass sixteenths after every kick; one repeated harmonic-minor hook.'
+			},
+			{
+				name: 'full-on',
+				minWeirdness: 0,
+				recipe:
+					'A short memorable harmonic-minor saw hook over the exact three-sixteenths-after-kick bass pattern.'
 			},
 			{
 				name: 'Goa',
+				minWeirdness: 7,
 				recipe:
-					'a 16th 303 squelch (ladder, lpq rising with arc, drive) with an .off(3/16, ...) octave echo and lastOf(8, iter(4)), an FM sitar phrase (.fmh(3), vibrato, jux(rev)) answering every 4 bars, tom polymeters'
+					'A repeating resonant synth motif with a short answering FM tone, over the unchanged kick and rolling bass.'
 			},
 			{
 				name: 'progressive',
+				minWeirdness: 0,
 				recipe:
-					'deeper and groovy: an FM sine bass with depth on arc and accents, a slow PWM pulse pad over 2-bar minor chords with filtered syncopated saw stabs, rides'
+					'Rounded bass with the exact rolling rhythm, sparse syncopated chords and slow filter movement.'
 			},
 			{
 				name: 'dark forest',
+				minWeirdness: 7,
 				recipe:
-					'a square bass with .noise grit moving to the flat second at phrase ends, euclidean FM metal hits (.fmh(1.414)) and crushed white-noise chatter through vowel, crushed claps, pitched-down metal samples in a dark hall'
+					'Dark square bass on the fixed rolling rhythm, a quiet filtered noise texture and a short tonal hook.'
 			},
 			{
 				name: 'twilight psy-techno',
+				minWeirdness: 7,
 				recipe:
-					'a single gated note whose euclid changes per bar over an 8-bar cycle through PWM, vowel sweeps and a 16th ping-pong delay, a ladder bass with a 32-bar cutoff sine'
+					'One repeated gated pulse motif and slow timbral movement above the fixed rolling bass.'
 			},
 			{
 				name: 'psychedelic lab (experimental)',
+				minWeirdness: 9,
 				recipe:
-					'a ladder acid line with FM depth and ratio modulated by sine and perlin, vowel chatter, chunk(4) octave jumps, hard ping-pong with pan(square.fast(4)), an FM triangle bass whose ratio changes per bar'
+					'Slow pulse-width or vowel colour movement on a stable synth motif; the kick and rolling bass remain unchanged.'
 			}
 		],
 		// The rolling bass already leaves room for the kick: no sidechain.
@@ -515,34 +608,46 @@ export const GENRES: Genre[] = [
 			"Russian hardbass (St Petersburg, XS Project, DJ Snat, Hard Bass School): fast, bouncy and cheeky. The 'bochka': a long distorted kick sample on every beat (hardkick:3/4/5, gabba:0 at gain .6, or clubkick:2 with .shape(.4); no bank) cut with .decay(.15-.22).sustain(0) so it ends before the off-beat. The hollow 'donk' bass on every off-beat: a sine at octave 1-2 with 2:1 FM, .fm(2-4).fmh(2).fmwave('triangle').fmdecay(.12).fmsustain(.25).decay(.3).sustain(0) and some .shape(); let it walk i-VI-VII-V and flip octaves at phrase ends. Off-beat open hats, claps on 2 and 4, snare rolls via lastOf + ply. Catchy Slavic hooks in harmonic minor (raised 7th, augmented second) in 2-4 bar call and response: a massive supersaw (.unison(7).spread(.9)), square or pulse leads, balalaika tremolo picking (.ply(4) with short decay and lpenv), accordion-like pulse with .vib and a slight vowel, whistles (high sine with .vib(5).vibmod(.3)), hoovers. Public-domain folk tunes (Kalinka, Korobeiniki, Polyushko Pole, Ochi Chornye) are fair game. Russian shouts (rus:N): davai on bar 1, pognali or gromche call-outs, a count rus:2 rus:3 rus:4 on the last bar of the phrase leading into the drop.",
 		styles: [
 			{
-				name: 'XS Project anthem',
+				name: 'classic groove',
+				minWeirdness: 0,
 				recipe:
-					'the donk walking i-VI-VII-V with an octave flip at phrase end, a 4-bar supersaw call and response whose answer leans on the raised 7th, davai on bar 1, pognali on bar 5, the count on bar 8'
+					'A firm kick and hollow off-beat donk, with a short repeated hook following the supplied progression.'
+			},
+			{
+				name: 'XS Project anthem',
+				minWeirdness: 0,
+				recipe:
+					'Off-beat hollow donk following the supplied roots, a four-bar saw hook and sparse Russian call-outs.'
 			},
 			{
 				name: 'gopnik-techno',
+				minWeirdness: 0,
 				recipe:
-					"darker natural minor: a donk stacked with a ladder saw top (FM depth rising with arc), PWM pulse stabs on a 3-in-8 euclid with dotted delay, a ride and rim echoes, a 'bochka bass' chant"
+					'A darker donk colour with quiet pulse chord answers and a sparse Russian chant, in the supplied mode.'
 			},
 			{
 				name: 'folk hardbass',
+				minWeirdness: 0,
 				recipe:
-					"a public-domain folk tune reinterpreted in harmonic minor on a tremolo-picked saw balalaika (ply with a short lpenv), the donk following the song's harmony, a crash on bar 1 and a clap roll at phrase end"
+					'An original folk-like short repeated hook with a singable answer; donk follows the supplied roots.'
 			},
 			{
 				name: 'hoover rave',
+				minWeirdness: 7,
 				recipe:
-					'hoover samples on bars 1 and 5 stacked with a supersaw riff that scoops into each note with a negative .penv, an octave-flipping donk with a small pitch dip, davai plus a rave shot'
+					'A restrained wide saw riff with stable pitch, off-beat donk and a sparse rave shout; synths only for pitched parts.'
 			},
 			{
 				name: 'hard bass school chant',
+				minWeirdness: 0,
 				recipe:
-					"crowd chants carry it: vse vmeste, bochka bass, gromche, then the count; a second clap line answers the crowd, the donk's FM depth sweeps slowly, a pulse lead resolving through the raised 7th"
+					'Sparse Russian call-outs answered by a short pulse hook, with a stable off-beat donk.'
 			},
 			{
 				name: 'accordion gabba (experimental)',
+				minWeirdness: 9,
 				recipe:
-					"an accordion from a pulse with near-unison FM (.fmh(1.01)), vibrato, an 'o' vowel and a detuned copy, an original hook with the augmented second, a gabba bochka with an extra hit at phrase ends, a bitcrushed donk"
+					'A pulse hook with gentle vibrato and vowel colour, a gabba kick and lightly crushed off-beat donk; stable pitch and rhythm.'
 			}
 		],
 		arc: {

@@ -1,7 +1,8 @@
+import { checkGroove, type GrooveContract, type GrooveEvent } from '#lib/dj/groove.js';
 import { validateLayer } from '#lib/dj/validate.js';
 import { inspectPattern, yieldToMain } from './prepare.js';
 import { AudioScheduler } from './scheduler.js';
-import { fitsHarmony, type HarmonyId } from '#lib/dj/harmony.js';
+import { fitsHarmonySpan, isFrenchHarmony, type HarmonyId } from '#lib/dj/harmony.js';
 import type { Pattern, StrudelRepl } from '@strudel/web';
 import { LAYERS, type Layers } from '#lib/dj/types.js';
 import { RUS_BASE, RUS_FILES } from '#lib/dj/voices.js';
@@ -161,33 +162,37 @@ async function compile(code: string): Promise<Pattern> {
  */
 export async function dryRun(
 	layers: Layers,
-	harmony?: HarmonyId
+	harmony?: HarmonyId,
+	groove?: GrooveContract
 ): Promise<Partial<Record<keyof Layers, string>>> {
 	if (!web) throw new Error('engine not initialised');
 	const problems: Partial<Record<keyof Layers, string>> = {};
 	const loads = new Map<string, Promise<unknown> | null>();
 	for (const layer of LAYERS) {
 		const code = layers[layer];
-		if (code === 'silence') continue;
+		if (code === 'silence') {
+			if (groove && (layer === 'kick' || layer === 'bass'))
+				problems[layer] = 'foundation layer must not be silent';
+			continue;
+		}
 		try {
 			await yieldToMain();
 			const pattern = await compile(validateLayer(code, layer));
+			const events: GrooveEvent[] = [];
 			await inspectPattern(pattern, (hap) => {
 				const { value } = hap;
-				if (harmony && !fitsHarmony(harmony, layer, value, hap.whole!.begin.valueOf()))
+				const begin = hap.whole!.begin.valueOf();
+				const end = hap.whole!.end.valueOf();
+				if (groove) events.push({ begin, end, value });
+				if (harmony && !fitsHarmonySpan(harmony, layer, value, begin, end))
 					throw new Error('notes do not follow the shared harmonic plan');
-				if (harmony && ['bass', 'synth', 'vox'].includes(layer)) {
-					if (Number(value.release ?? 0) > 0.3 || Number(value.delay ?? 0) > 0.3)
-						throw new Error('tonal tails are too long for the harmonic handoff');
-					// Held tones must remain compatible across each crossed chord boundary.
-					for (
-						let bar = Math.floor(hap.whole!.begin.valueOf()) + 1;
-						bar < hap.whole!.end.valueOf();
-						bar++
-					)
-						if (!fitsHarmony(harmony, layer, value, bar))
-							throw new Error('held note crosses an incompatible chord');
-				}
+				if (
+					harmony &&
+					isFrenchHarmony(harmony) &&
+					['bass', 'synth', 'vox'].includes(layer) &&
+					(Number(value.release ?? 0) > 0.3 || Number(value.delay ?? 0) > 0.3)
+				)
+					throw new Error('tonal tails are too long for the harmonic handoff');
 
 				const s =
 					typeof value.s === 'string'
@@ -204,6 +209,7 @@ export async function dryRun(
 					loads.set(key, preload(name, value)?.catch(() => null) ?? null);
 				}
 			});
+			if (groove) checkGroove(layer, events, groove);
 		} catch (e) {
 			problems[layer] = (e as Error).message;
 		}

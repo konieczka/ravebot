@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	FRENCH_HARMONIES,
 	chooseHarmony,
+	chooseTrackHarmony,
+	fitsHarmonySpan,
 	fitsHarmony,
 	parseHarmony,
 	transitionStart,
@@ -52,5 +54,27 @@ describe('harmonic plans', () => {
 	it('preserves phrase alignment after a shifted origin or a skip', () => {
 		expect(transitionStart(113.2, 3, 4)).toBe(115);
 		expect((transitionStart(119.8, 3, 4) + 4 - 3) % 4).toBe(0);
+	});
+});
+
+describe('genre-wide composition plans', () => {
+	it('keeps a compatible plan across tracks and changes incompatible genre plans', () => {
+		expect(chooseTrackHarmony('acid', 'pedal-d')).toBe('pedal-d');
+		expect(chooseTrackHarmony('detroit', 'jazz-a')).toBe('jazz-a');
+		expect(chooseTrackHarmony('psy', 'pedal-a')).toMatch(/^psy-/);
+		expect(chooseTrackHarmony('french', 'changes-a')).not.toBe('changes-a');
+	});
+	it('allows brief melodic passing notes but not bass clashes or held dissonance', () => {
+		expect(fitsHarmony('pedal-a', 'synth', { note: 'b3' }, 0.125)).toBe(true);
+		expect(fitsHarmony('pedal-a', 'synth', { note: 'b3' }, 0.25)).toBe(false);
+		expect(fitsHarmony('pedal-a', 'bass', { note: 'b1' }, 0.125)).toBe(false);
+		expect(fitsHarmonySpan('pedal-a', 'synth', { note: 'b3' }, 0.125, 0.25)).toBe(true);
+		expect(fitsHarmonySpan('pedal-a', 'synth', { note: 'b3' }, 0.125, 0.5)).toBe(false);
+		expect(fitsHarmonySpan('changes-a', 'synth', { note: 'e4' }, 0.75, 1.5)).toBe(false);
+	});
+	it('distinguishes vocal samples and noise from unknown pitched samples', () => {
+		expect(fitsHarmony('pedal-a', 'vox', { s: 'rave', n: 0 }, 0)).toBe(true);
+		expect(fitsHarmony('pedal-a', 'synth', { s: 'white' }, 0)).toBe(true);
+		expect(fitsHarmony('pedal-a', 'synth', { s: 'stab', n: 0 }, 0)).toBe(false);
 	});
 });
