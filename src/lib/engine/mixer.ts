@@ -94,10 +94,15 @@ export class Mixer {
 		return pos ? djFilter(this.timelines[deck]!, pos) : 0.5;
 	}
 
-	/** Kick sidechain depth: follows the kick's level, so nothing pumps while the kick is out. */
-	duck(deck: Deck, cycle: number): number {
+	/**
+	 * Kick sidechain depths on the deck's [music, vox] orbits. They follow the kick's level, so
+	 * nothing pumps while the kick is out.
+	 */
+	duck(deck: Deck, cycle: number): [number, number] {
 		const tl = this.timelines[deck];
-		return tl ? tl.style.duck * this.gain(deck, 'kick', cycle) : 0;
+		if (!tl) return [0, 0];
+		const kick = this.gain(deck, 'kick', cycle);
+		return [tl.style.duck * kick, (tl.style.voxDuck ?? tl.style.duck) * kick];
 	}
 
 	fx(deck: Deck, fx: FxName, cycle: number): number {
@@ -125,10 +130,18 @@ export class Mixer {
 export const MIXER_GLOBAL = '__ravebot';
 
 const M = MIXER_GLOBAL;
-/** Kick/drums and the tonal layers of each deck go to separate orbits so the kick can duck the rest. */
+/**
+ * Each deck's drums, bass + synth and vox go to separate orbits, so the kick can duck the music
+ * and the vocals by different amounts.
+ */
 const DRUM_ORBIT = (deck: number) => 1 + deck * 2;
 const MUSIC_ORBIT = (deck: number) => 2 + deck * 2;
+const VOX_ORBIT = (deck: number) => 5 + deck;
 const DRUM_LAYERS = new Set<LayerName>(['kick', 'hats', 'perc']);
+/** Every orbit the two decks use. */
+export const ORBITS = [0, 1].flatMap((d) => [DRUM_ORBIT(d), MUSIC_ORBIT(d), VOX_ORBIT(d)]);
+const orbitOf = (layer: LayerName, deck: number) =>
+	layer === 'vox' ? VOX_ORBIT(deck) : DRUM_LAYERS.has(layer) ? DRUM_ORBIT(deck) : MUSIC_ORBIT(deck);
 /** Drop silent events (breakdowns, faded decks) so they never reach the audio graph. */
 const AUDIBLE = '.filterValues(v => v.postgain > 0.001)';
 
@@ -152,10 +165,12 @@ export function buildProgram(decks: [Track | null, Track | null], mixer: Mixer):
 		for (const layer of LAYERS) {
 			const expr = track.layers[layer];
 			if (!expr || expr === 'silence') continue;
-			const orbit = DRUM_LAYERS.has(layer) ? DRUM_ORBIT(deck) : MUSIC_ORBIT(deck);
+			const orbit = orbitOf(layer, deck);
+			// Array values duck several orbits, each with its own depth.
 			const duck =
-				layer === 'kick' && tl.style.duck > 0
-					? `.duckorbit(${MUSIC_ORBIT(deck)}).duckattack(.16).duckdepth(signal(t => ${M}.duck(${deck}, t)))`
+				layer === 'kick' && (tl.style.duck > 0 || (tl.style.voxDuck ?? 0) > 0)
+					? `.duckorbit(signal(() => [${MUSIC_ORBIT(deck)}, ${VOX_ORBIT(deck)}])).duckattack(.16)` +
+						`.duckdepth(signal(t => ${M}.duck(${deck}, t)))`
 					: '';
 			layers.push(
 				`    (${expr}).late(${tl.origin}).orbit(${orbit})${duck}${deckFx}` +

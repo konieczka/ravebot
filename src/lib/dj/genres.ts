@@ -149,7 +149,7 @@ export const GENRES: Genre[] = [
 		name: 'French House',
 		bpm: 124,
 		brief:
-			"Daft Punk 'Discovery'-era French touch: shiny, euphoric disco house. A 909 kick on every beat that makes the whole mix pump, claps on 2 and 4, swung open hats and shakers. A funky, octave-jumping disco bass (plucky square or sawtooth). A looped riff of lush 7th/9th chords that sounds like a filtered disco sample (sawtooth or supersaw with .phaser() and a slowly moving low-pass), and a robot vocoder hook: a sawtooth melody through .vowel(). Bright and feel-good.",
+			"Daft Punk 'Discovery'-era French touch: shiny, euphoric disco house. A 909 kick on every beat that makes the whole mix pump, claps on 2 and 4, swung open hats and shakers. A funky, octave-jumping disco bass (plucky square or sawtooth). A looped riff of lush 7th/9th chords that sounds like a filtered disco sample (sawtooth or supersaw with .phaser() and a slowly moving low-pass), and a robot vocoder hook: a held sawtooth melody in octave 3-4 (.sustain(.7)) with a vowel per note, e.g. .vowel('<[o o a e] [a a o o]>'), bright (.lpf(4500)), dry and slightly driven (.shape(.15)). Bright and feel-good.",
 		modes: ['major', 'dorian', 'minor'],
 		// Filter house: the groove never stops; it is filtered down and swept back open into the drop.
 		arc: {
@@ -158,6 +158,8 @@ export const GENRES: Genre[] = [
 			impact: false,
 			gap: true,
 			duck: 0.7,
+			// Held vocoder notes would wobble on every kick at the full pump.
+			voxDuck: 0.3,
 			sweep: 'lowpass',
 			breakdown: { hats: 0.4, perc: 0.6 },
 			build: { kick: 1, bass: 1, hats: 1, perc: 1, synth: 1, vox: 0 }
