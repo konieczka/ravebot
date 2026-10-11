@@ -1,10 +1,9 @@
 /**
  * Russian shouts for hardbass, played as `s('rus:0')` (давай) ... `s('rus:11')`. Generated once
  * with Shabda (Google text-to-speech, ru-RU male voice) and served from
- * static/samples/rus/NN-name.wav, so nothing depends on the TTS service at runtime. Processed
- * with ffmpeg for a deep, heavy, clear shout: leading silence trimmed, pitched down 5 semitones
- * at the same length (asetrate + atempo, 44.1 kHz), high-pass 70 Hz, +3 dB low shelf at 160 Hz
- * for body, -3 dB at 300 Hz, +4 dB at 3 kHz, compressed (-20 dB, 4:1), normalised to 0.9 peak.
+ * static/samples/rus/NN-name.wav, so nothing depends on the TTS service at runtime. Rebuilt from
+ * the original recordings in ed656e2: natural pitch and timing, 44.1 kHz mono, 70 Hz high-pass,
+ * 0.7 peak. No pitch shifting, time stretching, presence boost or added compression.
  */
 export const RUS_VOICE = [
 	{ name: 'davai', word: 'давай', meaning: "come on / let's go" },
@@ -22,4 +21,7 @@ export const RUS_VOICE = [
 ] as const;
 
 export const RUS_BASE = '/samples/rus/';
-export const RUS_FILES = RUS_VOICE.map((v, i) => `${String(i).padStart(2, '0')}-${v.name}.wav`);
+// New URLs prevent browser caches from serving the old pitch-shifted recordings.
+export const RUS_FILES = RUS_VOICE.map(
+	(v, i) => `${String(i).padStart(2, '0')}-${v.name}.wav?v=natural-1`
+);

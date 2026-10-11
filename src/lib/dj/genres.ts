@@ -554,16 +554,25 @@ export const GENRES: Genre[] = [
 			build: { vox: 1 }
 		},
 		mix: mixProfile({
+			// Keep the mix open; the dedicated kick and metal strike provide the character.
 			swing: 0.5,
-			accent: 0.35,
-			glue: 0.7,
-			drive: 0.55,
-			bassDrive: 0.4,
+			accent: 0.2,
+			jitter: 0.03,
+			drift: 0,
+			glue: 0.3,
+			drive: 0.15,
+			bassDrive: 0.15,
 			synthDuck: 0.6,
 			space: 8000,
-			bass: -2,
-			synth: 20,
-			vox: 2
+			bass: 6,
+			synth: 26,
+			// Natural-pitch shouts retain their dynamics; leave master headroom.
+			vox: 0,
+			bochka: 0.6,
+			barrel: 0.1,
+			can: 0.85,
+			lofi: 0,
+			pump: 0.15
 		}),
 		seeds: HARDBASS
 	}

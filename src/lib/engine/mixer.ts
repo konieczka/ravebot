@@ -12,6 +12,8 @@ import {
 import { BASE_MIX, blendMix, humanize, swingAmount, type MixProfile } from '#lib/dj/mix.js';
 import { LAYERS, type LayerName, type Track } from '#lib/dj/types.js';
 
+import { hardbassVoice } from './hardbass.js';
+
 export type Deck = 0 | 1;
 
 export interface TransitionPlan {
@@ -119,9 +121,19 @@ export class Mixer {
 		return humanize(value, layer, t, this.mix(deck), deck);
 	}
 
+	hardbassVoice(layer: LayerName | 'strike', value: Record<string, unknown>, deck: Deck) {
+		return hardbassVoice(layer, value, this.mix(deck).barrel);
+	}
+
 	/** The deck's rumble send: it follows the kick through the arrangement and the blend (the bus sets its level). */
 	rumble(deck: Deck, cycle: number): number {
 		return this.mix(deck).rumble > 0 ? this.gain(deck, 'kick', cycle) : 0;
+	}
+
+	/** Level of the deck's synthesized bochka: it follows the kick through the arrangement and the blend. */
+	bochka(deck: Deck, cycle: number): number {
+		const level = this.mix(deck).bochka;
+		return level > 0 ? level * this.gain(deck, 'kick', cycle) : 0;
 	}
 
 	/**
@@ -166,7 +178,7 @@ const M = MIXER_GLOBAL;
  * kick, the synth bus is high-passed with presence and saturation, vox sits on its own, and the
  * rumble send is distorted and low-passed.
  */
-export const BUSES = ['drums', 'bass', 'synth', 'vox', 'rumble'] as const;
+export const BUSES = ['drums', 'bass', 'synth', 'vox', 'rumble', 'bochka'] as const;
 export type BusName = (typeof BUSES)[number];
 export const busOrbit = (bus: BusName, deck: number) =>
 	1 + deck * BUSES.length + BUSES.indexOf(bus);
@@ -219,15 +231,27 @@ export function buildProgram(decks: [Track | null, Track | null], mixer: Mixer):
 				SWUNG.has(layer) && !expr.includes('swing') && swingAmount(mix.swing) > 0
 					? `.swingBy(${swingAmount(mix.swing).toFixed(3)}, 8)`
 					: '';
+			const voice =
+				track.genre === 'hardbass' && (layer === 'kick' || layer === 'bass' || layer === 'vox')
+					? `.withValue(v => ${M}.hardbassVoice('${layer}', v, ${deck}))`
+					: '';
 			const human = `.withHap(h => h.withValue(v => ${M}.humanize(${deck}, '${layer}', v, h.whole ? h.whole.begin.valueOf() : 0)))`;
 			layers.push(
-				`    (${expr})${swing}${human}.late(${tl.origin}).orbit(${orbit(BUS_OF[layer])})${duck}${deckFx}` +
+				`    (${expr})${voice}${swing}${human}.late(${tl.origin}).orbit(${orbit(BUS_OF[layer])})${duck}${deckFx}` +
 					`.postgain(signal(t => ${M}.gain(${deck}, '${layer}', t)))${AUDIBLE}`
+			);
+		}
+		// A short exciter follows the kick rhythm, including fills and per-hit dynamics.
+		// Only the main kick supplies sub/body; this bus supplies impact and metal ringing.
+		const kick = track.layers.kick;
+		if (track.genre === 'hardbass' && mix.bochka > 0 && kick && kick !== 'silence') {
+			layers.push(
+				`    (${kick}).withValue(v => ${M}.hardbassVoice('strike', v, ${deck})).late(${tl.origin}).orbit(${orbit('bochka')})${deckFx}` +
+					`.postgain(signal(t => ${M}.bochka(${deck}, t)))${AUDIBLE}`
 			);
 		}
 		// Rumble: the kick, fully wet into a long dark reverb on its own bus (distorted, low-passed
 		// and ducked there), the low-end weight of Berlin techno.
-		const kick = track.layers.kick;
 		if (mix.rumble > 0 && kick && kick !== 'silence')
 			layers.push(
 				`    (${kick}).late(${tl.origin}).orbit(${orbit('rumble')}).room(1).roomsize(4).roomfade(.5).roomlp(1200).roomdim(200).dry(0)${deckFx}` +

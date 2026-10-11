@@ -40,6 +40,16 @@ export interface MixProfile {
 	space: number;
 	/** Share of the genre's kick sidechain depth applied to the synth bus (the bass always gets all of it). */
 	synthDuck: number;
+	/** Level of the short metal impact exciter accompanying the Hardbass kick. */
+	bochka: number;
+	/** Mild waveshaping on the dedicated Hardbass kick body, independent of the drums bus. */
+	barrel: number;
+	/** Metal shell resonance level, independent of the dry impact and kick body. */
+	can: number;
+	/** Cheap master: band-limited (no air, no deep sub), narrowed to near mono, clipped instead of limited. */
+	lofi: number;
+	/** Over-driven fast master compression, so the whole mix breathes on every kick. */
+	pump: number;
 }
 
 /** Shared starting point; genres override what makes them different. */
@@ -59,7 +69,12 @@ export const BASE_MIX: MixProfile = {
 	hats: 3,
 	perc: 2,
 	space: 7000,
-	synthDuck: 0.5
+	synthDuck: 0.5,
+	bochka: 0,
+	barrel: 0,
+	can: 0,
+	lofi: 0,
+	pump: 0
 };
 
 export const mixProfile = (overrides: Partial<MixProfile> = {}): MixProfile => ({

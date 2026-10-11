@@ -87,6 +87,27 @@ function saturationCurve(k: number): Float32Array<ArrayBuffer> {
 	return curve;
 }
 
+/** Stereo width by mid/side mixing: 1 leaves the image alone, 0 is mono. */
+function stereoWidth(ac: BaseAudioContext) {
+	const split = new ChannelSplitterNode(ac, { numberOfOutputs: 2 });
+	const merge = new ChannelMergerNode(ac, { numberOfInputs: 2 });
+	const [ll, lr, rr, rl] = [0, 0, 0, 0].map(() => new GainNode(ac));
+	split.connect(ll, 0).connect(merge, 0, 0);
+	split.connect(rl, 0).connect(merge, 0, 1);
+	split.connect(rr, 1).connect(merge, 0, 1);
+	split.connect(lr, 1).connect(merge, 0, 0);
+	return {
+		input: split,
+		output: merge,
+		set(width: number) {
+			const same = (1 + width) / 2;
+			const cross = (1 - width) / 2;
+			for (const g of [ll, rr]) smooth(g.gain, same, ac);
+			for (const g of [lr, rl]) smooth(g.gain, cross, ac);
+		}
+	};
+}
+
 function saturator(ac: BaseAudioContext, k: number) {
 	const node = new WaveShaperNode(ac, { oversample: '4x' });
 	node.curve = saturationCurve(k);
@@ -216,6 +237,32 @@ function createBus(ac: AudioContext, name: BusName): Bus {
 			wet
 		);
 		bus.update = (mix) => smooth(trim.gain, db(mix.vox), ac);
+	} else if (name === 'bochka') {
+		// The source is a 4 ms noise burst, never the sustained kick body. High-pass before
+		// exciting the shell, then sum a quiet dry impact with independently damped modes.
+		const excite = biquad(ac, 'highpass', 180);
+		const sum = new GainNode(ac);
+		const impact = new GainNode(ac, { gain: 0.22 });
+		input.connect(excite);
+		excite.connect(impact).connect(sum);
+		const modes = [
+			{ f: 310, decay: 0.045, level: 12 },
+			{ f: 487, decay: 0.04, level: 12 },
+			{ f: 743, decay: 0.035, level: 12 },
+			{ f: 1163, decay: 0.026, level: 10 },
+			{ f: 1831, decay: 0.018, level: 7 }
+		].map(({ f, decay, level }) => {
+			// Q/(pi*f) is the amplitude e-folding time; higher modes die sooner.
+			const band = biquad(ac, 'bandpass', f, Math.PI * f * decay);
+			const send = new GainNode(ac, { gain: 0 });
+			excite.connect(band).connect(send).connect(sum);
+			return { send, level };
+		});
+		series(sum, biquad(ac, 'highpass', 180), biquad(ac, 'lowpass', 4500), wet);
+		bus.returnHp = 250;
+		bus.update = (mix) => {
+			for (const { send, level } of modes) smooth(send.gain, level * mix.can, ac);
+		};
 	} else {
 		// Rumble: input is the kick's reverb tail only. The level is set after the distortion, which
 		// would otherwise flatten any difference in send level.
@@ -256,15 +303,22 @@ function createMaster(ac: AudioContext, out: AudioNode): Master {
 	const dry = new GainNode(ac, { gain: 0 });
 	input.connect(dry).connect(out);
 
-	// Mono lows: club systems and phones alike stay solid below 120 Hz.
+	// Mono lows: club systems and phones alike stay solid below 120 Hz. The sum is forced to stereo so
+	// the width stage always gets two channels.
 	const low = lr4(ac, 'lowpass', 120);
 	const high = lr4(ac, 'highpass', 120);
-	const sum = new GainNode(ac);
+	const sum = new GainNode(ac, { channelCount: 2, channelCountMode: 'explicit' });
 	input.connect(low.input);
 	low.output.connect(mono(ac)).connect(sum);
 	input.connect(high.input);
 	high.output.connect(sum);
 
+	// Tone. Clean: a small low-mid dip and some air. Lo-fi: band-limited, a low-mid hump, no air.
+	const width = stereoWidth(ac);
+	const floor = biquad(ac, 'highpass', 10);
+	const mud = biquad(ac, 'peaking', 300, 0.7, -1.5);
+	const air = biquad(ac, 'highshelf', 9000, BUTTERWORTH, 1.5);
+	const ceiling = biquad(ac, 'lowpass', 20000);
 	const glue = new DynamicsCompressorNode(ac, {
 		threshold: -14,
 		knee: 8,
@@ -282,18 +336,24 @@ function createMaster(ac: AudioContext, out: AudioNode): Master {
 		release: 0.08
 	});
 	const level = new GainNode(ac, { gain: db(2) });
+	// Lo-fi drives the final clipper instead of letting the limiter stay transparent.
+	const crunch = new GainNode(ac);
 	// Last line of defence: a soft clipper just under full scale.
 	const clip = new WaveShaperNode(ac, { oversample: '4x' });
 	clip.curve = saturationCurve(1.15);
+	sum.connect(width.input);
 	series(
-		sum,
-		biquad(ac, 'peaking', 300, 0.7, -1.5),
-		biquad(ac, 'highshelf', 9000, BUTTERWORTH, 1.5),
+		width.output,
+		floor,
+		mud,
+		air,
+		ceiling,
 		glue,
 		makeup,
 		sat.node,
 		limiter,
 		level,
+		crunch,
 		clip,
 		wet
 	);
@@ -302,7 +362,22 @@ function createMaster(ac: AudioContext, out: AudioNode): Master {
 		input,
 		wet,
 		dry,
-		update: (mix) => sat.set(1 + 3 * mix.drive)
+		update: (mix) => {
+			sat.set(1 + 3 * mix.drive);
+			const { lofi, pump } = mix;
+			width.set(1 - 0.85 * lofi);
+			smooth(floor.frequency, 10 + 30 * lofi, ac);
+			smooth(mud.gain, -1.5 + 3.5 * lofi, ac);
+			smooth(air.gain, 1.5 - 5 * lofi, ac);
+			smooth(ceiling.frequency, 20000 - 9000 * lofi, ac);
+			// Pump: a fast, over-driven master compressor that breathes on every kick.
+			glue.threshold.value = -14 - 10 * pump;
+			glue.ratio.value = 2 + 4 * pump;
+			glue.attack.value = 0.03 - 0.025 * pump;
+			glue.release.value = 0.25 - 0.17 * pump;
+			smooth(makeup.gain, db(2 + pump), ac);
+			smooth(crunch.gain, db(1.5 * lofi), ac);
+		}
 	};
 }
 
@@ -545,7 +620,10 @@ export class MixDesk {
 	}
 
 	setMasterMix(mix: MixProfile): void {
-		if (mix.drive === this.masterProfile.drive && this.master) return;
+		const same = (['drive', 'lofi', 'pump'] as const).every(
+			(k) => mix[k] === this.masterProfile[k]
+		);
+		if (same && this.master) return;
 		this.masterProfile = mix;
 		this.master?.update(mix);
 	}

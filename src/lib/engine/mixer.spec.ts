@@ -21,9 +21,9 @@ const live = (genre: Track['genre']) => {
 
 describe('buses', () => {
 	it('gives each deck its own drums, bass, synth, vox and rumble orbit', () => {
-		expect(new Set(ORBITS).size).toBe(10);
+		expect(new Set(ORBITS).size).toBe(12);
 		expect(busOrbit('bass', 0)).toBe(2);
-		expect(busOrbit('drums', 1)).toBe(6);
+		expect(busOrbit('drums', 1)).toBe(7);
 	});
 
 	it('routes bass and synth to separate buses', () => {
@@ -74,6 +74,26 @@ describe('groove and weight', () => {
 			.split('\n')
 			.find((l) => l.includes("'hats', v"))!;
 		expect(hats.match(/swingBy/g)).toHaveLength(1);
+	});
+
+	it('replaces the hardbass kick and adds just one short metal exciter', () => {
+		const code = buildProgram([track('hardbass'), null], live('hardbass'));
+		expect(code).toContain("hardbassVoice('kick', v, 0)");
+		expect(code).toContain("hardbassVoice('bass', v, 0)");
+		expect(code).toContain("hardbassVoice('vox', v, 0)");
+		expect(code.match(/hardbassVoice\('strike'/g)).toHaveLength(1);
+		expect(code).toMatch(/hardbassVoice\('strike'[^\n]*\.orbit\(6\)/);
+		expect(code).toContain('__ravebot.bochka(0, t)');
+		expect(buildProgram([track('hard'), null], live('hard'))).not.toContain('hardbassVoice');
+	});
+
+	it('keeps the metal strike silent when the kick leaves the arrangement', () => {
+		const mixer = live('hardbass');
+		expect(mixer.bochka(0, 40)).toBeGreaterThan(0);
+		expect(mixer.bochka(0, 60)).toBe(0);
+		const t = track('hardbass');
+		t.layers = { ...t.layers, kick: 'silence' };
+		expect(buildProgram([t, null], mixer)).not.toContain("hardbassVoice('strike'");
 	});
 
 	it('adds a rumble send only to genres that want one', () => {
