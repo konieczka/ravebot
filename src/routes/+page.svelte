@@ -51,9 +51,12 @@
 			<div class="status">
 				<span class="dot" class:on={dj.status === 'live'}></span>
 				{#if dj.status === 'live'}
-					BAR {Math.floor(dj.cycle) + 1} · {dj.bpm.toFixed(1)} BPM · {dj.mood.toUpperCase()}{dj.offline
-						? ' · OFFLINE MODE'
-						: ''}
+					BAR {Math.floor(dj.cycle) + 1} · {dj.bpm.toFixed(1)} BPM · {dj.mood.toUpperCase()} · {dj.source ===
+					'local'
+						? 'LOCAL CRATE'
+						: dj.offline
+							? 'AI OFFLINE (NO GATEWAY)'
+							: 'AI MODE'}
 				{:else if dj.status === 'booting'}
 					LOADING SAMPLES…
 				{:else}

@@ -21,6 +21,8 @@ const TICK_MS = 200;
 const BPM_STEP = 0.08;
 
 export type Status = 'off' | 'booting' | 'live';
+/** Where new tracks come from: the LLM, or only the built-in seed tracks remixed locally. */
+export type TrackSource = 'ai' | 'local';
 export type Mood = 'idle' | 'groove' | 'think' | 'mix' | 'glitch';
 
 export interface LogLine {
@@ -35,6 +37,7 @@ export interface LogLine {
  */
 export class DjBrain {
 	// Controls
+	source = $state<TrackSource>('ai');
 	genre = $state<GenreId>('minimal');
 	targetBpm = $state(128);
 	energy = $state(6);
@@ -105,6 +108,12 @@ export class DjBrain {
 		this.genStamp++;
 		if (this.next) this.next = null;
 		if (reason && this.status === 'live') this.say(`> ${reason}. Rewriting next track...`);
+	}
+
+	setSource(source: TrackSource) {
+		if (source === this.source) return;
+		this.source = source;
+		this.invalidateNext(source === 'ai' ? 'AI generation on' : 'Local crate only');
 	}
 
 	toggleLock(layer: LayerName) {
@@ -295,15 +304,20 @@ export class DjBrain {
 		};
 
 		this.generating = true;
-		this.say(
-			`> prompting LLM: ${genreById(genre).name}, energy ${req.energy}, weird ${req.weirdness}`
-		);
 		let track: Track;
-		try {
-			track = await this.requestTrack(req);
-		} catch (e) {
-			this.say(`! generation failed (${(e as Error).message}), using backup crate`, 'warn');
+		if (this.source === 'local') {
+			this.say(`> digging the local crate: ${genreById(genre).name}`);
 			track = fallbackTrack(genre, current?.layers);
+		} else {
+			this.say(
+				`> prompting LLM: ${genreById(genre).name}, energy ${req.energy}, weird ${req.weirdness}`
+			);
+			try {
+				track = await this.requestTrack(req);
+			} catch (e) {
+				this.say(`! generation failed (${(e as Error).message}), using backup crate`, 'warn');
+				track = fallbackTrack(genre, current?.layers);
+			}
 		}
 		if (stamp !== this.genStamp || this.status !== 'live') {
 			this.generating = false;

@@ -9,7 +9,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the page and press **WAKE UP TECHNOBOT**. Without any configuration the bot runs in **offline mode**: it remixes its built-in seed tracks layer by layer, so you can work on the UI and the mixer without an LLM.
+Open the page and press **WAKE UP TECHNOBOT**. Without any configuration the bot runs in **offline mode**: it remixes its built-in seed tracks layer by layer, so you can work on the UI and the mixer without an LLM. The **Track source** switch (AI generated / Local crate) forces the same local mode at any time, even with a gateway configured.
 
 ## Connect an LLM (Cloudflare AI Gateway)
 
@@ -40,7 +40,7 @@ Controls ─► DjBrain (src/lib/dj/brain.svelte.ts) ─► /api/generate ─►
 - **Musical lint:** the same validator rejects made-up sounds/banks, drums in the wrong layer (e.g. a snare in `kick`), glued rests (`cp~`) and signals called as functions, and repairs unbalanced mini-notation brackets. The server feeds lint errors back to the model and retries (up to 3 calls), rejects tracks that copy the prompt's example or the previous track, uses JSON-schema mode where the provider supports it, and caps replies at 600 tokens so repetition loops fail fast.
 - **Dry run:** before a track is queued, every layer is compiled and queried for 4 bars without playing (`engine.dryRun`). Runtime errors, empty patterns and unknown sounds/banks are caught, and broken layers are replaced by the current track's layer (or the whole track by the backup crate).
 - **Seamless mixing:** both decks play inside one `stack(...)`. Each layer gets `.postgain(signal(t => gain(deck, layer, t)))`, so the crossfade is computed per event at its exact cycle position with a single `evaluate()` per transition. Hats/perc blend in first, then the synth, and kick + bass swap hard on the middle downbeat, the way a DJ swaps bass with the EQ. Transitions start on 4-bar phrase boundaries.
-- **Controls:** subgenre, BPM (the app owns the tempo and glides at ~0.4 BPM/s), energy, weirdness (also raises the LLM temperature), track length, crowd request (free text), skip, hold, and per-layer locks that carry a layer through the next transition.
+- **Controls:** track source (AI or local crate), subgenre, BPM (the app owns the tempo and glides at ~0.4 BPM/s), track length, AI-only settings (energy, weirdness, which also raises the LLM temperature, and a free-text crowd request), skip, hold, and per-layer locks that carry a layer through the next transition.
 
 ## Scripts
 

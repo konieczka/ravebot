@@ -31,6 +31,24 @@
 	</div>
 
 	<fieldset>
+		<legend>TRACK SOURCE</legend>
+		<div class="seg">
+			<button
+				class:on={dj.source === 'ai'}
+				onclick={() => dj.setSource('ai')}
+				aria-pressed={dj.source === 'ai'}
+				title="An LLM writes new Strudel tracks for the set">AI GENERATED</button
+			>
+			<button
+				class:on={dj.source === 'local'}
+				onclick={() => dj.setSource('local')}
+				aria-pressed={dj.source === 'local'}
+				title="Only remix the built-in hand-written tracks, no LLM calls">LOCAL CRATE</button
+			>
+		</div>
+	</fieldset>
+
+	<fieldset>
 		<legend>SUBGENRE</legend>
 		<div class="genres">
 			{#each GENRES as g (g.id)}
@@ -59,30 +77,6 @@
 		<input type="range" min="110" max="160" step="1" bind:value={dj.targetBpm} />
 	</label>
 
-	<label class="slider">
-		<span class="head"><span>ENERGY</span><output>{dj.energy}</output></span>
-		<input
-			type="range"
-			min="1"
-			max="10"
-			step="1"
-			bind:value={dj.energy}
-			onchange={() => dj.invalidateNext(`Energy → ${dj.energy}`)}
-		/>
-	</label>
-
-	<label class="slider">
-		<span class="head"><span>WEIRDNESS</span><output>{dj.weirdness}</output></span>
-		<input
-			type="range"
-			min="0"
-			max="10"
-			step="1"
-			bind:value={dj.weirdness}
-			onchange={() => dj.invalidateNext(`Weirdness → ${dj.weirdness}`)}
-		/>
-	</label>
-
 	<fieldset>
 		<legend>TRACK LENGTH</legend>
 		<div class="seg">
@@ -94,18 +88,50 @@
 		</div>
 	</fieldset>
 
-	<form class="vibe" onsubmit={sendVibe}>
-		<label for="vibe">CROWD REQUEST</label>
-		<div class="row">
-			<input
-				id="vibe"
-				maxlength="140"
-				placeholder="rainy warehouse at 4am…"
-				bind:value={vibeDraft}
-			/>
-			<button type="submit">SEND</button>
+	<fieldset class="ai-only" disabled={dj.source === 'local'}>
+		<legend>
+			AI SETTINGS
+			{#if dj.source === 'local'}<small>OFF IN LOCAL MODE</small>{/if}
+		</legend>
+		<div class="stack">
+			<label class="slider">
+				<span class="head"><span>ENERGY</span><output>{dj.energy}</output></span>
+				<input
+					type="range"
+					min="1"
+					max="10"
+					step="1"
+					bind:value={dj.energy}
+					onchange={() => dj.invalidateNext(`Energy → ${dj.energy}`)}
+				/>
+			</label>
+
+			<label class="slider">
+				<span class="head"><span>WEIRDNESS</span><output>{dj.weirdness}</output></span>
+				<input
+					type="range"
+					min="0"
+					max="10"
+					step="1"
+					bind:value={dj.weirdness}
+					onchange={() => dj.invalidateNext(`Weirdness → ${dj.weirdness}`)}
+				/>
+			</label>
+
+			<form class="vibe" onsubmit={sendVibe}>
+				<label for="vibe">CROWD REQUEST</label>
+				<div class="row">
+					<input
+						id="vibe"
+						maxlength="140"
+						placeholder="rainy warehouse at 4am…"
+						bind:value={vibeDraft}
+					/>
+					<button type="submit">SEND</button>
+				</div>
+			</form>
 		</div>
-	</form>
+	</fieldset>
 </section>
 
 <style>
@@ -182,6 +208,31 @@
 		margin-bottom: 8px;
 		display: flex;
 		justify-content: space-between;
+	}
+	legend small {
+		font-size: 7px;
+		color: var(--muted);
+		opacity: 0.8;
+	}
+	.ai-only {
+		border: 2px dashed #3d3466;
+		padding: 10px 12px 14px;
+	}
+	.ai-only legend {
+		padding: 0 6px;
+		margin-bottom: 0;
+		gap: 10px;
+	}
+	.ai-only .stack {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+	}
+	.ai-only:disabled .stack {
+		opacity: 0.35;
+	}
+	.ai-only:disabled input {
+		cursor: not-allowed;
 	}
 	.genres {
 		display: grid;
