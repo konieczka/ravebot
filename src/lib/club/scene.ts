@@ -1,5 +1,26 @@
 import type { SectionKind } from '#lib/dj/arrangement.js';
 import { LAYERS, type LayerName } from '#lib/dj/types.js';
+import { LINE_ARRAYS, WIN, berlinLive, paintBerlin, windowFrame } from './berlin.js';
+import {
+	H,
+	W,
+	canvas,
+	clamp,
+	concrete,
+	disc,
+	ell,
+	formwork,
+	glow,
+	hash,
+	lerp,
+	line,
+	px,
+	rgba,
+	rng,
+	smiley,
+	type Ctx,
+	type Pt
+} from './draw.js';
 import { text, textC } from './font.js';
 import { Crowd } from './crowd.js';
 import { SHOULDERS, choreograph, type Pose } from './moves.js';
@@ -11,8 +32,7 @@ import { HEAD, TORSO, cuff, hand, headSprite, neck, torsoSprite, tube } from './
  * schedule (beat phase, per-layer gains, arrangement section), never an audio analyser, so the
  * lights land exactly on the beat.
  */
-export const W = 480;
-export const H = 270;
+export { W, H };
 
 export interface SceneInput {
 	/** The set is playing. */
@@ -44,8 +64,6 @@ export interface SceneInput {
 	reducedMotion: boolean;
 }
 
-type Ctx = CanvasRenderingContext2D;
-type Pt = [number, number];
 type Envelopes = Record<LayerName, number>;
 
 const PINK = '#ff3dc8';
@@ -53,156 +71,93 @@ const BLUE = '#56a8ff';
 const CYAN = '#56c8ff';
 const TIERS = [54, 98, 142];
 
-// ── pixel helpers ───────────────────────────────────────────────────────────
-
-function rng(seed: number) {
-	return () => {
-		seed = (seed + 0x6d2b79f5) | 0;
-		let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-		t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-	};
-}
-const hash = (a: number, b: number) => {
-	const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
-	return s - Math.floor(s);
-};
-const lerp = (a: number, b: number, x: number) => a + (b - a) * x;
-const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
-
-function px(g: Ctx, x: number, y: number, w: number, h: number, c?: string) {
-	if (c) g.fillStyle = c;
-	g.fillRect(Math.round(x), Math.round(y), w, h);
-}
-function disc(g: Ctx, cx: number, cy: number, r: number, c: string) {
-	g.fillStyle = c;
-	cx = Math.round(cx);
-	cy = Math.round(cy);
-	for (let dy = -r; dy <= r; dy++) {
-		const w = Math.floor(Math.sqrt(r * r - dy * dy + r * 0.5));
-		g.fillRect(cx - w, cy + dy, w * 2 + 1, 1);
-	}
-}
-function ell(g: Ctx, cx: number, cy: number, rx: number, ry: number, c: string) {
-	g.fillStyle = c;
-	for (let dy = -ry; dy <= ry; dy++) {
-		const w = Math.floor(rx * Math.sqrt(Math.max(0, 1 - (dy / (ry + 0.5)) ** 2)));
-		g.fillRect(Math.round(cx - w), Math.round(cy + dy), w * 2 + 1, 1);
-	}
-}
-function line(g: Ctx, x0: number, y0: number, x1: number, y1: number, w: number, c: string) {
-	g.fillStyle = c;
-	const n = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
-	for (let i = 0; i <= n; i++) {
-		const t = i / n;
-		g.fillRect(Math.round(lerp(x0, x1, t) - w / 2), Math.round(lerp(y0, y1, t) - w / 2), w, w);
-	}
-}
-function rgba(hex: string, a: number) {
-	const n = parseInt(hex.slice(1), 16);
-	return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
-}
-function smiley(g: Ctx, cx: number, cy: number, r: number, c: string) {
-	for (let a = 0; a < 64; a++) {
-		const t = (a / 64) * Math.PI * 2;
-		px(g, cx + Math.cos(t) * r, cy + Math.sin(t) * r, 1, 1, c);
-	}
-	px(g, cx - r * 0.35, cy - r * 0.3, 1, 2, c);
-	px(g, cx + r * 0.35, cy - r * 0.3, 1, 2, c);
-	for (let a = 0; a < 16; a++) {
-		const t = Math.PI * (0.2 + (0.6 * a) / 15);
-		px(g, cx + Math.cos(t) * r * 0.55, cy + Math.sin(t) * r * 0.5, 1, 1, c);
-	}
-}
-function canvas(w = W, h = H): [HTMLCanvasElement, Ctx] {
-	const c = document.createElement('canvas');
-	c.width = w;
-	c.height = h;
-	return [c, c.getContext('2d')!];
-}
-function concrete(
-	g: Ctx,
-	R: () => number,
-	x: number,
-	y: number,
-	w: number,
-	h: number,
-	base: string,
-	dark = '#15121c',
-	light = '#302a3c'
-) {
-	px(g, x, y, w, h, base);
-	for (let i = 0; i < w * h * 0.18; i++)
-		px(g, x + R() * w, y + R() * h, 1, 1, R() < 0.55 ? dark : light);
-	for (let k = 0; k < (w * h) / 600; k++) {
-		let cx = x + R() * w;
-		let cy = y + R() * h;
-		for (let j = 0; j < 8; j++) {
-			px(g, cx, cy, 1, 1, '#0c0a12');
-			cx += R() * 2 - 1;
-			cy += 1;
-		}
-	}
-}
-
 // ── static layers ───────────────────────────────────────────────────────────
+
+/** Text on the balcony walls: lamps keep clear of it. */
+const WALL_TEXT = [
+	[38, 58, 30, 26],
+	[410, 54, 38, 32],
+	[14, 102, 38, 30],
+	[434, 102, 40, 30]
+];
+/** CO2 cannon nozzles, between the LED tubes on the sub stacks. */
+const CO2_X = [116, 364];
+/** Ceiling lamps hanging over the side walls. */
+const CAGE_LAMPS = [24, 80, 400, 456];
 
 function buildBackground() {
 	const [c, g] = canvas();
 	const R = rng(11);
-	let gr = g.createLinearGradient(0, 0, 0, H);
-	gr.addColorStop(0, '#05030a');
-	gr.addColorStop(0.45, '#140b2a');
-	gr.addColorStop(0.7, '#1b0f32');
-	gr.addColorStop(1, '#07040d');
-	g.fillStyle = gr;
-	g.fillRect(0, 0, W, H);
+	px(g, 0, 0, W, H, '#07040d');
+	paintBerlin(g);
 
-	// Back window wall with the skyline behind it.
-	px(g, 150, 18, 180, 140, '#0c0720');
-	gr = g.createLinearGradient(0, 22, 0, 156);
-	gr.addColorStop(0, '#120a2c');
-	gr.addColorStop(1, '#3a1a5c');
-	g.fillStyle = gr;
-	g.fillRect(152, 22, 176, 134);
-	for (let x = 152; x < 328;) {
-		const w = (6 + R() * 12) | 0;
-		const h = (12 + R() * 34) | 0;
-		px(g, x, 156 - h, w, h, '#120a26');
-		for (let k = 0; k < (w * h) / 18; k++)
-			if (R() < 0.6)
-				px(
-					g,
-					x + 1 + R() * (w - 2),
-					158 - h + R() * (h - 4),
-					1,
-					1,
-					R() < 0.7 ? '#e8b75a' : '#ff6fd8'
-				);
-		x += w + ((R() * 3) | 0);
-	}
-	// Fernsehturm.
-	px(g, 299, 44, 3, 112, '#0a0618');
-	disc(g, 300, 54, 6, '#0a0618');
-	px(g, 296, 61, 9, 2, '#0a0618');
-	px(g, 300, 22, 1, 26, '#0a0618');
-	for (let x = 152; x < 330; x += 22) px(g, x, 22, 2, 134, '#08051a');
-	for (let y = 22; y < 156; y += 27) px(g, 152, y, 176, 2, '#08051a');
+	const sides = [
+		[0, 104],
+		[376, 480]
+	] as const;
+	const warm = (x: number, y: number, r: number, a: number) => {
+		g.globalCompositeOperation = 'lighter';
+		glow(g, x, y, r, '#ff9a4a', a);
+		g.globalCompositeOperation = 'source-over';
+	};
 
-	// Side walls with three balcony tiers each.
-	concrete(g, R, 0, 0, 128, 200, '#100b1c', '#0a0714', '#1a1428');
-	concrete(g, R, 352, 0, 128, 200, '#100b1c', '#0a0714', '#1a1428');
-	for (const ty of TIERS)
-		for (const [x0, x1] of [
-			[0, 128],
-			[352, 480]
-		]) {
-			px(g, x0, ty - 40, x1 - x0, 38, '#0a0614');
-			for (let x = x0 + 10; x < x1; x += 30) px(g, x, ty - 40, 5, 38, '#17112a');
-			px(g, x0, ty, x1 - x0, 4, '#2b2342');
-			px(g, x0, ty, x1 - x0, 1, '#463a66');
-			px(g, x0, ty + 4, x1 - x0, 2, '#06040b');
+	for (const [x0, x1] of sides) {
+		const w = x1 - x0;
+		concrete(g, R, x0, 0, w, 200, '#100b1c', '#0a0714', '#1a1428');
+		formwork(g, R, x0, 0, w, 200);
+
+		// Ceiling: a riveted girder with cage lamps hanging off it.
+		px(g, x0, 0, w, 12, '#06040b');
+		for (let x = x0 + 6; x < x1; x += 16) line(g, x, 0, x + 8, 7, 1, '#141022');
+		px(g, x0, 7, w, 3, '#1a1428');
+		px(g, x0, 7, w, 1, '#2e2644');
+		for (let x = x0 + 2; x < x1; x += 6) px(g, x, 8, 1, 1, '#3a3152');
+
+		// Balcony bays: concrete back wall, steel columns, a pipe run, bulkhead lamps.
+		for (const ty of TIERS) {
+			const top = ty - 40;
+			px(g, x0, top, w, 38, '#0c0818');
+			formwork(g, R, x0, top, w, 38);
+			px(g, x0, top + 3, w, 2, '#241c36');
+			px(g, x0, top + 3, w, 1, '#3a3052');
+			for (let x = x0 + 4; x < x1; x += 24) px(g, x, top + 2, 2, 4, '#2e2644');
+			for (let x = x0 + 12; x < x1 - 2; x += 32) {
+				px(g, x, top, 5, 38, '#15102a');
+				px(g, x, top, 1, 38, '#2a2244');
+				px(g, x + 4, top, 1, 38, '#1f1936');
+				px(g, x + 2, top, 1, 38, '#1b1530');
+				for (const y of [top + 1, top + 35]) {
+					px(g, x + 1, y, 1, 1, '#4a4068');
+					px(g, x + 3, y, 1, 1, '#4a4068');
+				}
+			}
+			for (let x = x0 + 28; x < x1; x += 32) {
+				const y = top + 11;
+				if (
+					WALL_TEXT.some(([bx, by, bw, bh]) => x > bx && x < bx + bw && y > by - 4 && y < by + bh)
+				)
+					continue;
+				px(g, x - 2, y - 1, 5, 4, '#2a1e18');
+				px(g, x - 1, y, 3, 2, '#ffcf8a');
+				px(g, x - 1, y, 1, 2, '#3a2a18');
+				px(g, x + 1, y, 1, 2, '#3a2a18');
+				warm(x + 0.5, y + 1, 12, 0.2);
+			}
 		}
+		for (const ty of TIERS) {
+			px(g, x0, ty, w, 4, '#2b2342');
+			px(g, x0, ty, w, 1, '#463a66');
+			for (let x = x0 + 3; x < x1; x += 8) px(g, x, ty + 2, 1, 1, '#4a3e66');
+			px(g, x0, ty + 4, w, 2, '#06040b');
+		}
+		for (const lx of CAGE_LAMPS)
+			if (lx > x0 && lx < x1) {
+				px(g, lx, 10, 1, 3, '#1a1428');
+				px(g, lx - 2, 13, 5, 2, '#2a2238');
+				px(g, lx - 1, 15, 3, 1, '#ffd08a');
+				warm(lx + 0.5, 16, 14, 0.25);
+			}
+	}
 
 	// Small wall banners.
 	px(g, 16, 104, 34, 26, '#09070d');
@@ -212,44 +167,181 @@ function buildBackground() {
 	px(g, 436, 104, 36, 1, '#2a2535');
 	['BASS', 'UNITY', 'FREEDOM'].forEach((s, i) => textC(g, s, 454, 107 + i * 7, '#cfc8e6'));
 
-	// Concrete pillars with tags.
-	for (const x of [128, 330]) {
+	controlPanel(g);
+	generatorAndExit(g);
+
+	// Concrete pillars with tags and stickers.
+	for (const x of [104, 354]) {
 		concrete(g, R, x, 0, 22, 196, '#25202f');
+		formwork(g, R, x + 2, 0, 18, 196);
 		px(g, x, 0, 2, 196, '#14111b');
 		px(g, x + 20, 0, 2, 196, '#14111b');
+		px(g, x + 2, 0, 1, 196, '#3a3448');
 		for (let k = 0; k < 6; k++)
 			px(g, x + 3 + R() * 14, 100 + R() * 80, 2 + R() * 4, 1, R() < 0.5 ? PINK : CYAN);
+		for (let k = 0; k < 3; k++) {
+			const y = 106 + k * 14 + R() * 6;
+			px(g, x + 8 + R() * 3, y, 3, 3, ['#8a849a', '#6a8a2a', '#9a6a2a'][k]);
+		}
+		for (let k = 0; k < 2; k++) {
+			let y = 22 + R() * 20;
+			const sx = x + 4 + R() * 14;
+			for (let j = 0; j < 30 + R() * 40; j++)
+				px(g, sx + Math.sin(j * 0.3) * 0.5, y++, 1, 1, '#1a1622');
+		}
 	}
 
-	// Lighting truss.
-	px(g, 118, 9, 244, 1, '#5a5274');
-	px(g, 118, 17, 244, 1, '#4a4360');
-	px(g, 118, 18, 244, 1, '#211c2e');
-	for (let x = 118; x < 362; x += 8) {
+	// Lighting truss, with cable runs sagging off it.
+	px(g, 94, 9, 292, 1, '#5a5274');
+	px(g, 94, 17, 292, 1, '#4a4360');
+	px(g, 94, 18, 292, 1, '#211c2e');
+	for (let x = 94; x < 386; x += 8) {
 		line(g, x, 10, x + 4, 16, 1, '#3c3550');
 		line(g, x + 4, 16, x + 8, 10, 1, '#3c3550');
 	}
+	for (const x of [94, 385]) px(g, x, 0, 1, 18, '#3c3550');
+	for (const [a, b, sag] of [
+		[98, 126, 6],
+		[354, 382, 5],
+		[170, 214, 3]
+	])
+		for (let x = a; x <= b; x++)
+			px(g, x, 18 + Math.round(Math.sin(((x - a) / (b - a)) * Math.PI) * sag), 1, 1, '#0c0a12');
 
-	// Line arrays and subs (the cones are animated).
-	for (const x of [154, 312]) {
-		px(g, x + 6, 18, 2, 4, '#2a2535');
-		for (let i = 0; i < 6; i++) {
-			px(g, x, 22 + i * 12, 14, 11, '#121018');
-			px(g, x, 22 + i * 12, 14, 1, '#2e2a3a');
-		}
-	}
-	for (const x of [130, 330])
+	// Sub stacks either side of the booth.
+	for (const x of [106, 354])
 		for (let i = 0; i < 3; i++) {
-			px(g, x, 152 + i * 13, 20, 12, '#110f17');
-			px(g, x, 152 + i * 13, 20, 1, '#2e2a3a');
+			const y = 152 + i * 13;
+			px(g, x, y, 20, 12, '#110f17');
+			px(g, x, y, 20, 1, '#2e2a3a');
+			px(g, x, y + 11, 20, 1, '#07060b');
+			for (const [cx, cy] of [
+				[x, y],
+				[x + 19, y],
+				[x, y + 11],
+				[x + 19, y + 11]
+			])
+				px(g, cx, cy, 1, 1, '#4a4460');
+			px(g, x + 17, y + 3, 1, 5, '#22202c');
 		}
+	// CO2 cannons on top of the stacks.
+	for (const x of CO2_X) {
+		px(g, x - 2, 149, 5, 3, '#2a2638');
+		px(g, x - 2, 149, 5, 1, '#4a4460');
+		px(g, x - 1, 146, 3, 3, '#1a1724');
+		px(g, x - 1, 146, 1, 3, '#3a3550');
+	}
 
-	gr = g.createLinearGradient(0, 186, 0, H);
+	const gr = g.createLinearGradient(0, 186, 0, H);
 	gr.addColorStop(0, '#1a0f2c');
 	gr.addColorStop(1, '#05030a');
 	g.fillStyle = gr;
 	g.fillRect(0, 186, W, H - 186);
 	return c;
+}
+
+/** The building was a power station: its old control panel and a generator still stand under the balconies. */
+const GAUGES: Pt[] = [
+	[17, 167],
+	[37, 167],
+	[57, 167],
+	[77, 167]
+];
+const PANEL_LAMPS = Array.from({ length: 10 }, (_, k) => 12 + k * 7);
+const FLYWHEEL: Pt = [431, 168];
+const PRESSURE: Pt = [400, 155];
+const BEACON: Pt = [415, 157];
+
+/** Left: the control panel, painted green-grey steel with four gauges, lamps and a knife switch. */
+function controlPanel(g: Ctx) {
+	px(g, 4, 148, 96, 39, '#0a0810');
+	px(g, 6, 149, 92, 37, '#17131f');
+	px(g, 6, 149, 92, 1, '#2c2638');
+	px(g, 6, 149, 1, 37, '#221d2c');
+	px(g, 97, 149, 1, 37, '#0e0b14');
+	for (const x of [8, 95]) for (const y of [151, 183]) px(g, x, y, 1, 1, '#3e3650');
+	text(g, 'KRAFTWERK', 10, 152, '#6e5e3e');
+	px(g, 10, 158, 70, 1, '#0f0c16');
+	for (const [x, y] of GAUGES) {
+		disc(g, x, y, 7, '#0a0810');
+		disc(g, x, y, 6, '#5c566a');
+		for (let k = 0; k <= 6; k++) {
+			const a = Math.PI * (0.85 + (1.3 * k) / 6);
+			px(g, x + Math.cos(a) * 5, y + Math.sin(a) * 5, 1, 1, k >= 5 ? '#8a2a3a' : '#2a2634');
+		}
+		px(g, x - 3, y + 8, 7, 2, '#3e3850');
+		px(g, x - 2, y + 8, 5, 1, '#24202e');
+	}
+	for (const x of PANEL_LAMPS) {
+		px(g, x - 1, 179, 4, 4, '#0a0810');
+		px(g, x, 180, 2, 2, '#1c1824');
+	}
+	// Knife switch, thrown.
+	px(g, 86, 160, 9, 16, '#0f0c16');
+	px(g, 86, 160, 9, 1, '#2c2638');
+	for (const x of [88, 92]) px(g, x, 162, 1, 12, '#4a3e30');
+	line(g, 88, 173, 90, 163, 1, '#6a6478');
+	line(g, 92, 173, 94, 163, 1, '#6a6478');
+	px(g, 89, 162, 6, 2, '#1a1a1a');
+	// Hazard sign: lightning in a yellow triangle.
+	for (let y = 0; y < 6; y++) px(g, 88 - y / 2 + 3, 151 + y, y + 1, 1, '#8a7030');
+	px(g, 91, 153, 1, 2, '#14111c');
+	px(g, 90, 155, 1, 1, '#14111c');
+	// Conduit down into the floor.
+	for (const x of [20, 46, 70]) px(g, x, 186, 2, 3, '#121018');
+}
+
+/** Right: a generator with a flywheel (it turns with the beat), and the fire exit. */
+function generatorAndExit(g: Ctx) {
+	// Plinth and the drum of the generator, banded and riveted.
+	px(g, 380, 180, 64, 7, '#15121c');
+	px(g, 380, 180, 64, 1, '#2a2638');
+	const shade = ['#3e504a', '#2e3c38', '#26322e', '#26322e', '#1f2a28', '#18201e', '#121816'];
+	for (let y = 160; y < 180; y++)
+		px(g, 384, y, 36, 1, shade[Math.floor(((y - 160) / 20) * shade.length)]);
+	for (let x = 389; x < 420; x += 7) {
+		px(g, x, 160, 1, 20, '#141c1a');
+		px(g, x + 1, 161, 1, 1, '#5a6a64');
+		px(g, x + 1, 178, 1, 1, '#5a6a64');
+	}
+	px(g, 383, 159, 2, 22, '#121816');
+	px(g, 394, 166, 21, 7, '#a8903a');
+	text(g, 'GEN 3', 395, 167, '#1a1408');
+	// Shaft out to the flywheel.
+	px(g, 420, FLYWHEEL[1] - 1, 11, 3, '#4a4a5a');
+	px(g, 420, FLYWHEEL[1] - 1, 11, 1, '#7a7a8a');
+	// Steam pipe up into the balcony slab, with a red valve wheel and a pressure gauge.
+	px(g, 388, 148, 3, 12, '#2e2a3a');
+	px(g, 388, 148, 1, 12, '#4a4460');
+	disc(g, 389, 152, 2, '#8a1e24');
+	px(g, 389, 152, 1, 1, '#14111c');
+	px(g, PRESSURE[0], PRESSURE[1] + 3, 1, 2, '#4a4460');
+	disc(g, PRESSURE[0], PRESSURE[1], 3, '#0c1210');
+	disc(g, PRESSURE[0], PRESSURE[1], 2, '#bdb59a');
+	px(g, BEACON[0] - 1, BEACON[1] + 1, 3, 2, '#1a1a22');
+
+	// Fire exit: a riveted steel door, a push bar and the green running man.
+	const dx = 452;
+	px(g, dx - 2, 156, 26, 31, '#0c0a12');
+	px(g, dx, 158, 22, 29, '#1e1a2a');
+	px(g, dx, 158, 22, 1, '#3a3448');
+	px(g, dx, 158, 1, 29, '#2e2a3c');
+	for (const y of [160, 184]) for (const x of [dx + 2, dx + 19]) px(g, x, y, 1, 1, '#4a4460');
+	px(g, dx + 7, 161, 8, 6, '#06040a');
+	px(g, dx + 7, 161, 8, 1, '#141222');
+	px(g, dx + 2, 172, 18, 2, '#5a5470');
+	px(g, dx + 2, 174, 18, 1, '#0c0a12');
+	px(g, dx + 3, 149, 16, 6, '#0d6a34');
+	px(g, dx + 3, 149, 16, 1, '#2aff7a');
+	const man = ['..#..', '.###.', '#.#.#', '.#.#.', '#...#'];
+	man.forEach((row, y) =>
+		[...row].forEach((ch, x) => ch === '#' && px(g, dx + 5 + x, 150 + y, 1, 1, '#eafff0'))
+	);
+	px(g, dx + 12, 152, 5, 1, '#eafff0');
+	px(g, dx + 15, 151, 1, 3, '#eafff0');
+	g.globalCompositeOperation = 'lighter';
+	glow(g, dx + 11, 152, 14, '#2aff7a', 0.18);
+	g.globalCompositeOperation = 'source-over';
 }
 
 function buildBanner(lines: string[], emblem: 'smile' | 'crown') {
@@ -285,15 +377,25 @@ const CDJ_X = [168, 268] as const;
 const JOG_Y = 132;
 /** Mixer channel columns. */
 const CHANNELS = [222, 229, 252, 259];
+/** The drum machine and the bassline box either side of the decks. */
+const TR909 = { x: 141 };
+const TB303 = { x: 314 };
+/** Step button colours in groups of two, dim and lit. */
+const STEP_COLORS = [
+	['#5a1a14', '#ff4a2a'],
+	['#5a3a14', '#ffa02a'],
+	['#5a5214', '#ffe64a'],
+	['#4a4858', '#ffffff']
+];
 
 function buildBooth() {
 	const [c, g] = canvas();
 	const R = rng(5);
 
 	// Table top.
-	px(g, 154, 136, 172, 6, '#2a2438');
-	px(g, 154, 136, 172, 1, '#4a4260');
-	px(g, 154, 141, 172, 1, '#0d0a14');
+	px(g, 136, 136, 208, 6, '#2a2438');
+	px(g, 136, 136, 208, 1, '#4a4260');
+	px(g, 136, 141, 208, 1, '#0d0a14');
 
 	// CDJs: screen, cue pads, play/cue, jog wheel, pitch fader.
 	for (const x of CDJ_X) {
@@ -331,36 +433,56 @@ function buildBooth() {
 	px(g, 232, 135, 17, 1, '#06050a');
 
 	// Laptop on the right, lid towards the robot: we see its back and its stickers.
-	px(g, 314, 124, 12, 12, '#2a2638');
-	px(g, 314, 124, 12, 1, '#5a5274');
-	px(g, 314, 124, 1, 12, '#3a3550');
-	px(g, 313, 135, 14, 1, '#0e0c16');
-	px(g, 316, 126, 3, 2, '#c6ff3d');
-	px(g, 322, 132, 3, 2, '#4dd2ff');
-	px(g, 316, 132, 2, 2, '#ffffff');
-	px(g, 323, 126, 1, 2, '#ff3b5c');
+	px(g, 332, 124, 12, 12, '#2a2638');
+	px(g, 332, 124, 12, 1, '#5a5274');
+	px(g, 332, 124, 1, 12, '#3a3550');
+	px(g, 331, 135, 14, 1, '#0e0c16');
+	px(g, 334, 126, 3, 2, '#c6ff3d');
+	px(g, 340, 132, 3, 2, '#4dd2ff');
+	px(g, 334, 132, 2, 2, '#ffffff');
+	px(g, 341, 126, 1, 2, '#ff3b5c');
+
+	// A drum machine on the left: knobs over a row of step buttons (they light up live).
+	px(g, TR909.x, 127, 26, 10, '#8a8698');
+	px(g, TR909.x, 127, 26, 1, '#b4b0c2');
+	px(g, TR909.x, 136, 26, 1, '#2a2638');
+	px(g, TR909.x + 1, 128, 6, 1, '#c8402a');
+	for (let k = 0; k < 7; k++) px(g, TR909.x + 9 + k * 2, 129, 1, 1, '#2a2638');
+	for (let k = 0; k < 8; k++) px(g, TR909.x + 1 + k * 3, 133, 2, 2, STEP_COLORS[k >> 1][0]);
+
+	// A silver bassline box on the right: knobs and a little keyboard.
+	px(g, TB303.x, 128, 16, 9, '#9a96a8');
+	px(g, TB303.x, 128, 16, 1, '#c4c0d2');
+	px(g, TB303.x, 136, 16, 1, '#2a2638');
+	for (let k = 0; k < 5; k++) px(g, TB303.x + 4 + k * 2, 130, 1, 1, '#2a2638');
+	for (let k = 0; k < 14; k++) px(g, TB303.x + 1 + k, 133, 1, 2, k % 2 ? '#1a1724' : '#e8e4f0');
 
 	// A bottle of Club-Mate on the left.
-	px(g, 158, 123, 1, 1, '#c8c0ee');
-	px(g, 158, 124, 1, 3, '#5a4418');
-	px(g, 157, 127, 3, 9, '#5a4418');
-	px(g, 157, 130, 3, 3, '#f0b030');
-	px(g, 158, 131, 1, 1, '#2a2438');
-	px(g, 157, 127, 1, 3, '#8a6a28');
+	px(g, 138, 123, 1, 1, '#c8c0ee');
+	px(g, 138, 124, 1, 3, '#5a4418');
+	px(g, 137, 127, 3, 9, '#5a4418');
+	px(g, 137, 130, 3, 3, '#f0b030');
+	px(g, 138, 131, 1, 1, '#2a2438');
+	px(g, 137, 127, 1, 3, '#8a6a28');
 
 	// Patch cables between the decks and the mixer.
 	for (const [x0, x1] of [
 		[212, 218],
-		[262, 268]
+		[262, 268],
+		[166, 170],
+		[310, 316]
 	])
 		for (let x = x0; x <= x1; x++)
 			px(g, x, 137 + Math.round(Math.sin(((x - x0) / (x1 - x0)) * Math.PI)), 1, 1, '#07060c');
 
 	// The concrete front.
-	concrete(g, R, 156, 142, 168, 44, '#1d1826', '#15121c', '#2a2433');
-	px(g, 156, 142, 168, 1, '#3a3348');
-	px(g, 156, 184, 168, 2, '#0b0910');
-	for (const x of [198, 284]) px(g, x, 143, 1, 41, '#110e18');
+	concrete(g, R, 138, 142, 204, 44, '#1d1826', '#15121c', '#2a2433');
+	px(g, 138, 142, 204, 1, '#3a3348');
+	px(g, 138, 184, 204, 2, '#0b0910');
+	for (const x of [158, 198, 284, 322]) px(g, x, 143, 1, 41, '#110e18');
+	// Hazard tape along the stage edge.
+	for (let x = 138; x < 342; x++)
+		for (let y = 181; y < 184; y++) px(g, x, y, 1, 1, ((x + y) >> 2) % 2 ? '#a88418' : '#14111c');
 
 	// Torn wheatpaste posters under everything else.
 	const paper = (x: number, y: number, w: number, h: number, ink: string) => {
@@ -375,6 +497,8 @@ function buildBooth() {
 	};
 	paper(286, 168, 14, 16, '#3a2f52');
 	paper(244, 170, 12, 13, '#b3263f');
+	paper(141, 148, 14, 18, '#1a5a4a');
+	paper(325, 162, 14, 17, '#2a4a8a');
 
 	// Berlin sticker.
 	const ink = '#14111c';
@@ -418,7 +542,9 @@ function buildBooth() {
 		[267, 146, '#c6ff3d'],
 		[277, 172, '#ffb03b'],
 		[318, 160, '#4dd2ff'],
-		[203, 176, '#ff3b5c']
+		[203, 176, '#ff3b5c'],
+		[146, 170, '#ff3dc8'],
+		[330, 150, '#c6ff3d']
 	] as const) {
 		px(g, x, y, 4, 4, col);
 		px(g, x + 1, y + 1, 2, 1, '#14111c');
@@ -471,10 +597,10 @@ interface Emitter {
 const EMITTERS: Emitter[] = [
 	{ x: 0, y: 150, a: -0.1 * Math.PI, s: 0.07, c: 0 },
 	{ x: 480, y: 150, a: -0.9 * Math.PI, s: 0.07, c: 1 },
-	{ x: 122, y: 16, a: 0.28 * Math.PI, s: 0.14, c: 2 },
-	{ x: 358, y: 16, a: 0.72 * Math.PI, s: 0.14, c: 0 },
-	{ x: 164, y: 138, a: -0.72 * Math.PI, s: 0.12, c: 1 },
-	{ x: 316, y: 138, a: -0.28 * Math.PI, s: 0.12, c: 2 },
+	{ x: 98, y: 16, a: 0.28 * Math.PI, s: 0.14, c: 2 },
+	{ x: 382, y: 16, a: 0.72 * Math.PI, s: 0.14, c: 0 },
+	{ x: 146, y: 138, a: -0.72 * Math.PI, s: 0.12, c: 1 },
+	{ x: 334, y: 138, a: -0.28 * Math.PI, s: 0.12, c: 2 },
 	{ x: 240, y: 12, a: 0.5 * Math.PI, s: 0.38, c: 2 }
 ];
 
@@ -503,6 +629,7 @@ interface Frame {
 export class ClubScene {
 	private g: Ctx;
 	private bg = buildBackground();
+	private frame = windowFrame();
 	private booth = buildBooth();
 	private fog = buildFog();
 	private banL = buildBanner(['TECHNO', 'PEOPLE', 'BETTER', 'HUMANS'], 'smile');
@@ -526,11 +653,11 @@ export class ClubScene {
 		const R = rng(42);
 		this.balconies = TIERS.map(() =>
 			[
-				[2, 126],
-				[354, 478]
+				[2, 102],
+				[378, 478]
 			].map(([a, b]) =>
-				Array.from({ length: 17 }, (_, i) => ({
-					x: a + ((i + R() * 0.6) * (b - a)) / 17,
+				Array.from({ length: 14 }, (_, i) => ({
+					x: a + ((i + R() * 0.6) * (b - a)) / 14,
 					hand: R(),
 					ph: R() * 0.2
 				}))
@@ -580,12 +707,16 @@ export class ClubScene {
 		g.globalCompositeOperation = 'source-over';
 		g.globalAlpha = 1;
 		g.drawImage(this.bg, 0, 0);
+		berlinLive(g, this.t, i.cycle, i.live);
+		g.drawImage(this.frame, 0, 0);
 		this.room(f);
 		this.balconyCrowd(f);
 		this.signs(f);
 		this.tubes(f);
+		this.machines(f);
 		this.strobes(f);
 		this.discoBall(f);
+		this.co2(f);
 		this.additive(() => {
 			g.globalAlpha = i.live ? 0.08 + 0.1 * E.kick + 0.12 * f.brk + 0.05 * E.bass : 0.05;
 			g.drawImage(this.fog, -((this.t * 5) % W), 100);
@@ -631,17 +762,11 @@ export class ClubScene {
 		const g = this.g;
 		this.additive(() => {
 			g.fillStyle = rgba(brk ? '#4d8bff' : i.accent, 0.05 + 0.12 * E.synth + 0.1 * brk);
-			g.fillRect(152, 22, 176, 134);
+			g.fillRect(WIN.x, WIN.y, WIN.w, WIN.h);
 		});
-		if (i.cycle % 1 < 0.5 || !i.live) {
-			px(g, 300, 21, 1, 1, '#ff2a2a');
-			g.globalAlpha = 0.4;
-			px(g, 299, 20, 3, 3, '#ff2a2a');
-			g.globalAlpha = 1;
-		}
 		this.additive(() => {
 			for (let k = 0; k < 8; k++) {
-				const x = 140 + k * 28;
+				const x = 132 + k * 31;
 				const a = Math.PI / 2 + Math.sin(this.t * 0.6 + k) * 0.35;
 				const col = k % 2 ? PINK : brk ? '#4d8bff' : i.accent;
 				g.fillStyle = rgba(col, (0.03 + 0.06 * E.synth + 0.05 * brk) * (i.live ? 1 : 0.2));
@@ -653,10 +778,25 @@ export class ClubScene {
 				g.fill();
 			}
 		});
+		// Moving heads: a yoke under the truss, the head tilting with its beam.
 		for (let k = 0; k < 8; k++) {
-			const x = 140 + k * 28;
-			px(g, x - 2, 18, 5, 4, '#1a1626');
-			px(g, x - 1, 21, 3, 1, rgba(k % 2 ? PINK : i.accent, 0.3 + 0.7 * E.kick));
+			const x = 132 + k * 31;
+			const a = Math.PI / 2 + Math.sin(this.t * 0.6 + k) * 0.35;
+			px(g, x - 3, 18, 7, 1, '#2a2438');
+			px(g, x - 3, 18, 1, 4, '#2a2438');
+			px(g, x + 3, 18, 1, 4, '#2a2438');
+			disc(g, x, 21, 2, '#1a1626');
+			px(g, x - 1, 19, 1, 1, '#3a3550');
+			const lx = x + Math.round(Math.cos(a) * 2);
+			const ly = 21 + Math.round(Math.sin(a) * 2);
+			px(g, lx, ly, 1, 1, rgba(k % 2 ? PINK : i.accent, 0.4 + 0.6 * E.kick));
+		}
+		// LED pixel bar along the bottom chord, chasing on the beat.
+		const step = Math.floor(i.cycle * 8);
+		for (let x = 94; x < 386; x += 2) {
+			const n = (x - 94) / 2;
+			const lit = i.live && (n + step) % 12 < 2;
+			px(g, x, 17, 1, 1, lit ? rgba(n % 4 < 2 ? PINK : i.accent, 0.5 + 0.5 * E.hats) : '#2a2438');
 		}
 	}
 
@@ -674,7 +814,7 @@ export class ClubScene {
 					px(g, p.x + (si ? 0 : 1), y, 1, 1, si ? '#3a6ad0' : '#a02a84');
 					if (p.hand < hype * 0.7) px(g, p.x + (si ? -1 : 2), y - 3, 1, 4, '#07040e');
 				}
-				const [x0, x1] = si ? [352, 480] : [0, 128];
+				const [x0, x1] = si ? [376, 480] : [0, 104];
 				px(g, x0, ty - 5, x1 - x0, 1, '#3a3152');
 				for (let x = x0 + 2; x < x1; x += 5) px(g, x, ty - 5, 1, 5, '#2a2340');
 				const col = si ? BLUE : PINK;
@@ -692,20 +832,20 @@ export class ClubScene {
 		const g = this.g;
 		const flicker = hash(Math.floor(this.t * 12), 9) > 0.93 ? 0.3 : 1;
 		const lit = i.live ? 0.25 + 0.75 * E.vox : 0.12;
-		this.neon(['BERLIN', 'BRENNT', 'BESSER'], 82, 62, PINK, lit * flicker, 1);
-		this.neon(['ALTE', 'MAUERN', 'NEUE', 'FREIHEIT'], 400, 58, CYAN, lit, 1);
+		this.neon(['BERLIN', 'BRENNT', 'BESSER'], 52, 62, PINK, lit * flicker, 1);
+		this.neon(['ALTE', 'MAUERN', 'NEUE', 'FREIHEIT'], 428, 58, CYAN, lit, 1);
 
 		const sway = Math.round(Math.sin(this.t * 0.8) * 0.7);
-		g.drawImage(this.banL, 126 + sway, 22);
-		g.drawImage(this.banR, 326 - sway, 22);
+		g.drawImage(this.banL, 101 + sway, 22);
+		g.drawImage(this.banR, 351 - sway, 22);
 
 		const pump = Math.round(E.kick * 1.6);
-		for (const x of [154, 312])
+		for (const x of LINE_ARRAYS)
 			for (let k = 0; k < 6; k++) {
 				disc(g, x + 7, 27 + k * 12, 2 + (k % 2 ? 0 : pump), '#22202c');
 				px(g, x + 7, 27 + k * 12, 1, 1, '#06050a');
 			}
-		for (const x of [130, 330])
+		for (const x of [106, 354])
 			for (let k = 0; k < 3; k++) {
 				disc(g, x + 10, 158 + k * 13, 4 + pump, '#1d1b26');
 				disc(g, x + 10, 158 + k * 13, 1 + pump, '#08070c');
@@ -955,28 +1095,37 @@ export class ClubScene {
 		if (i.live) px(g, 237 + (Math.floor(beat) % 4) * 2, 126, 1, 1, i.accent);
 		px(g, 232 + Math.round(i.crossfade * 14), 134, 3, 2, '#ece8ff');
 
+		// Drum machine: the running light steps through the bar in eighths, the kick key flashes.
+		const stepAt = Math.floor(beat * 2) % 8;
+		for (let k = 0; k < 8; k++) {
+			const lit = i.live && (k === stepAt || (k % 2 === 0 && E.kick > 0.5 && k >> 1 === 0));
+			px(g, TR909.x + 1 + k * 3, 133, 2, 2, STEP_COLORS[k >> 1][lit ? 1 : 0]);
+		}
+		// Bassline box: the accent LED follows the bass.
+		px(g, TB303.x + 1, 130, 2, 1, i.live && E.bass > 0.4 ? '#ff3a3a' : '#4a1a1a');
+
 		// Laptop logo breathes; brighter while it is writing the next track.
 		const glow = i.thinking ? 0.6 + 0.4 * Math.sin(this.t * 6) : 0.35 + 0.3 * E.vox;
 		g.globalAlpha = i.live ? glow : 0.2;
-		smiley(g, 320, 129, 2, PINK);
+		smiley(g, 338, 129, 2, PINK);
 		g.globalAlpha = 1;
 
 		// LED strip along the table edge, chasing on the beat.
 		const step = Math.floor(beat * 2);
-		for (let x = 156; x < 324; x += 3) {
-			const k = ((x - 156) / 3) | 0;
+		for (let x = 138; x < 342; x += 3) {
+			const k = ((x - 138) / 3) | 0;
 			const lit = i.live && (k + step) % 8 < 2;
 			px(g, x, 141, 2, 1, lit ? rgba(i.accent, 0.5 + 0.5 * E.kick) : '#1a1626');
 		}
 
 		const al = i.live ? 0.3 + 0.7 * E.bass : 0.1;
-		px(g, 156, 186, 168, 1, rgba(PINK, al));
+		px(g, 138, 186, 204, 1, rgba(PINK, al));
 		this.additive(() => {
 			const gr = g.createLinearGradient(0, 186, 0, 200);
 			gr.addColorStop(0, rgba(PINK, al * 0.45));
 			gr.addColorStop(1, rgba(PINK, 0));
 			g.fillStyle = gr;
-			g.fillRect(140, 186, 200, 14);
+			g.fillRect(122, 186, 236, 14);
 		});
 	}
 
@@ -984,10 +1133,10 @@ export class ClubScene {
 	private tubes({ i, E, beat, brk }: Frame) {
 		const g = this.g;
 		for (const [x, n] of [
-			[133, 0],
-			[145, 1],
-			[335, 2],
-			[347, 3]
+			[109, 0],
+			[121, 1],
+			[359, 2],
+			[371, 3]
 		]) {
 			px(g, x, 100, 2, 50, '#0e0c16');
 			px(g, x, 99, 2, 1, '#3a3550');
@@ -1000,6 +1149,75 @@ export class ClubScene {
 					? 0.25 + 0.25 * Math.sin(this.t * 2 + y * 0.2 + n)
 					: Math.exp(-(((beat % 1) - p + 1) % 1) * 6) * (this.sm.kick * 0.8 + 0.2) + E.synth * 0.1;
 				px(g, x, 101 + y, 2, 1, rgba(col, clamp(v, 0, 1)));
+			}
+		}
+	}
+
+	/** The power station's machines run on the music: gauges, lamps, a flywheel turning with the beat. */
+	private machines({ i, E, beat }: Frame) {
+		const g = this.g;
+		const sm = this.sm;
+		const levels = [sm.kick * 0.5 + E.kick * 0.5, E.bass, sm.hats * 0.5 + E.hats * 0.5, E.synth];
+		GAUGES.forEach(([x, y], n) => {
+			const v = i.live ? clamp(levels[n], 0, 1) : 0;
+			const a = Math.PI * (0.85 + 1.3 * v);
+			line(g, x, y, x + Math.cos(a) * 4.5, y + Math.sin(a) * 4.5, 1, '#d8d2e6');
+			px(g, x, y, 1, 1, '#8a2a3a');
+		});
+		const step = Math.floor(beat * 2);
+		PANEL_LAMPS.forEach((x, k) => {
+			const v = i.live ? E[LAYERS[k % LAYERS.length]] : 0;
+			const lit = v > 0.35 || (i.live && (k + step) % 10 === 0);
+			const col = ['#3aa870', '#b88030', '#b83a3a'][k % 3];
+			px(g, x, 180, 2, 2, lit ? col : '#1c1824');
+		});
+
+		// Flywheel: rim, six spokes and a red balance weight, a quarter turn per beat.
+		const [fx, fy] = FLYWHEEL;
+		const rot = i.live ? (beat * Math.PI) / 2 : 0;
+		for (let k = 0; k < 6; k++) {
+			const a = rot + (k / 6) * Math.PI * 2;
+			line(g, fx, fy, fx + Math.cos(a) * 10, fy + Math.sin(a) * 10, 1, '#3a4440');
+		}
+		for (let k = 0; k < 96; k++) {
+			const a = (k / 96) * Math.PI * 2;
+			const lit = Math.cos(a + Math.PI * 0.75) > 0.4;
+			px(g, fx + Math.cos(a) * 12, fy + Math.sin(a) * 12, 1, 1, lit ? '#6a7a74' : '#2e3836');
+			px(g, fx + Math.cos(a) * 11, fy + Math.sin(a) * 11, 1, 1, '#3e4a46');
+		}
+		px(g, fx + Math.cos(rot) * 11, fy + Math.sin(rot) * 11, 2, 2, '#b0242a');
+		disc(g, fx, fy, 2, '#5a6460');
+		px(g, fx, fy, 1, 1, '#9aa49e');
+
+		const [gx, gy] = PRESSURE;
+		const p = Math.PI * (0.85 + 1.3 * (i.live ? clamp(0.3 + 0.6 * sm.bass, 0, 1) : 0));
+		line(g, gx, gy, gx + Math.cos(p) * 1.8, gy + Math.sin(p) * 1.8, 1, '#1a1410');
+		const flash = i.live && E.kick > 0.5;
+		px(g, BEACON[0], BEACON[1], 1, 1, flash ? '#ffb03b' : '#5a3a14');
+		if (flash)
+			this.additive(() => glow(g, BEACON[0] + 0.5, BEACON[1] + 0.5, 6, '#ffb03b', 0.5 * E.kick));
+	}
+
+	/** CO2 jets: a white plume shoots up on the drop's first two bars and the last bar of the build. */
+	private co2({ i, kind }: Frame) {
+		if (i.reducedMotion || !i.live || i.gap) return;
+		const bar = i.x * 32;
+		const firing = (kind === 'peak' && bar < 2) || (kind === 'build' && bar >= 31);
+		if (!firing) return;
+		const a = i.cycle % 1;
+		const fade = a < 0.45 ? 1 : Math.max(0, 1 - (a - 0.45) * 2.5);
+		if (fade <= 0) return;
+		const g = this.g;
+		const reach = Math.min(1, a * 5);
+		const frame = Math.floor(this.t * 24);
+		for (const x of CO2_X) {
+			const n = Math.round(46 * reach);
+			for (let k = 0; k < n; k++) {
+				const y = 145 - k * 2;
+				const r = 1 + Math.round(k * 0.18 + (1 - fade) * 3);
+				const jx = (hash(k, frame + x) - 0.5) * (1 + k * 0.12);
+				const al = (0.75 - (k / 46) * 0.55) * fade * (k > n - 4 ? 0.5 : 1);
+				ell(g, x + jx, y, r, Math.max(1, r >> 1), rgba('#f4f0ff', al));
 			}
 		}
 	}
