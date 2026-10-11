@@ -29,6 +29,14 @@ export interface ArcStyle {
 	duck: number;
 	/** Breakdown level overrides, e.g. acid keeps its 303 line playing without the kick. */
 	breakdown?: Partial<Record<LayerName, number>>;
+	/** Build-up level overrides, e.g. French house keeps the whole groove under its filter sweep. */
+	build?: Partial<Record<LayerName, number>>;
+	/**
+	 * How the DJ filter moves into the drop. 'highpass' (default): the breakdown opens up from a
+	 * muffled low-pass, then a high-pass sweeps up through the build. 'lowpass': filter house, the
+	 * low-pass closes through the breakdown and opens all the way up over the build.
+	 */
+	sweep?: 'highpass' | 'lowpass';
 }
 
 export interface Timeline {
@@ -112,6 +120,7 @@ export function layerLevel(tl: Timeline, pos: Position, layer: LayerName, pinned
 	if (inGap(tl, pos)) return 0;
 	if (pinned) return 1;
 	if (pos.kind === 'breakdown') return tl.style.breakdown?.[layer] ?? LEVELS.breakdown[layer];
+	if (pos.kind === 'build') return tl.style.build?.[layer] ?? LEVELS.build[layer];
 	return LEVELS[pos.kind][layer];
 }
 
@@ -136,12 +145,15 @@ export function intensity(pos: Position): number {
 
 /**
  * DJ filter for the whole deck (Strudel's `djf`: 0.5 is flat, lower is low-pass, higher is
- * high-pass). The breakdown opens up from a muffled low-pass, the build sweeps a high-pass up
- * so the low end slams back on the drop.
+ * high-pass; the low-pass cutoff is (v * 22)^4 Hz). By default the breakdown opens up from a
+ * muffled low-pass (~1 kHz → 7 kHz) and the build sweeps a high-pass up so the low end slams back
+ * on the drop. Filter house instead closes the low-pass to ~250 Hz and reopens it over the build.
  */
 export function djFilter(tl: Timeline, pos: Position): number {
-	if (pos.kind === 'breakdown') return lerp(0.26, 0.42, pos.x);
-	if (pos.kind === 'build' && !inGap(tl, pos)) return lerp(0.52, 0.76, pos.x ** 1.5);
+	const lowpass = tl.style.sweep === 'lowpass';
+	if (pos.kind === 'breakdown') return lowpass ? lerp(0.4, 0.18, pos.x) : lerp(0.26, 0.42, pos.x);
+	if (pos.kind === 'build' && !inGap(tl, pos))
+		return lowpass ? lerp(0.18, 0.48, pos.x ** 1.3) : lerp(0.52, 0.76, pos.x ** 1.5);
 	return 0.5;
 }
 

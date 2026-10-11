@@ -96,6 +96,18 @@ describe('levels', () => {
 		expect(djFilter(tl, at(78))).toBeGreaterThan(0.6);
 		expect(djFilter(tl, at(80))).toBe(0.5);
 	});
+
+	it('filter house: closes the low-pass through the breakdown and reopens it, groove intact', () => {
+		const french = { ...tl, style: GENRES.find((g) => g.id === 'french')!.arc };
+		expect(djFilter(french, at(70))).toBeLessThan(djFilter(french, at(57)));
+		expect(djFilter(french, at(73))).toBeLessThan(0.3);
+		expect(djFilter(french, at(79.5))).toBeGreaterThan(djFilter(french, at(76)));
+		expect(djFilter(french, at(79.5))).toBeLessThan(0.49);
+		expect(djFilter(french, at(80))).toBe(0.5);
+		expect(layerLevel(french, at(76), 'kick')).toBe(1);
+		expect(layerLevel(french, at(76), 'vox')).toBe(0);
+		expect(layerLevel(french, at(79.8), 'kick')).toBe(0);
+	});
 });
 
 describe('build-up fx', () => {

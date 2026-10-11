@@ -46,6 +46,9 @@ Pattern transforms: .fast(2) .slow(2) .rev() .ply(2) .degradeBy(.3) .sometimesBy
   .every(4, x => x.fast(2)) .off(1/8, x => x.add(note(12))) .jux(rev) .struct('x ~ x x') .mask('<1 [1 0]>')
   .lastOf(8, x => x.ply(2)) (a fill in the last bar of every 8)   .swingBy(1/6, 8) (16th swing)
   Filter envelope (acid plucks): .lpf(300).lpenv(4).lpa(.01).lpd(.12).lpq(14)
+  FM and pitch envelope (metallic donks, zaps): .fm(4).fmh(1.5) .penv(12).pdecay(.05)
+  .phaser(2) (swirling disco loop)  .vib(6).vibmod(.3) (vibrato, e.g. whistles)
+  Short tight kick: s('bd*4').bank('RolandTR909').decay(.15).sustain(0)
 Combine: stack(a, b)  cat(a, b)
 
 RULES
@@ -66,7 +69,7 @@ Layers (the DJ mixer crossfades each one separately, so every sound must sit in 
 - hats: ONLY hh, oh, rd, cr
 - perc: sd, cp, rim, lt, mt, ht (no bd, no hats)
 - bass: the bassline, synth sounds only
-- synth: stabs, chords, leads, arps, pads (synth sounds) or noise FX
+- synth: stabs, chords, leads, arps, pads (synth sounds), noise FX, or hoover/stab rave samples
 - vox: vocal shots and FX one-shots (vox samples) or a vowel-filtered synth chant
 `.trim();
 
@@ -89,7 +92,9 @@ const TWISTS = [
 	'vox: a rave shout (rave:0, rave:4 or rave:5) on bar 1 of every 8',
 	'vox: a robot chant with .vowel() on a sawtooth note every 4 bars',
 	'vox: spoken numbers counting across bars with <...>',
-	'synth: open the filter with arc so it grows with the track'
+	'synth: open the filter with arc so it grows with the track',
+	'synth: an FM lead with a pitch envelope that zaps on each note',
+	'bass: answer every kick with off-beat notes only'
 ];
 const pick = <T>(xs: readonly T[], n: number): T[] =>
 	[...xs].sort(() => Math.random() - 0.5).slice(0, n);
@@ -113,9 +118,10 @@ export function buildMessages(req: GenerateRequest) {
 	const genre = genreById(req.genre);
 	const example = genre.seeds[Math.floor(Math.random() * genre.seeds.length)];
 	const key = pick(KEYS, 1)[0];
+	const mode = pick(genre.modes ?? ['minor'], 1)[0];
 
 	const system = [
-		'You are RaveBot, a robot DJ who live-codes techno tracks in Strudel (a JavaScript port of TidalCycles).',
+		'You are RaveBot, a robot DJ who live-codes techno and rave tracks in Strudel (a JavaScript port of TidalCycles).',
 		'You answer with a single JSON object and nothing else.',
 		CHEAT_SHEET,
 		LAYER_ROLES,
@@ -130,7 +136,7 @@ export function buildMessages(req: GenerateRequest) {
 		`Weirdness: ${req.weirdness}/10 (0 = classic genre template, 10 = experimental but still danceable).`
 	];
 	lines.push(
-		`Key: ${key} minor (bass in octave 1-2, synth in octave 3-5).`,
+		`Key: ${key} ${mode} (bass in octave 1-2, synth in octave 3-5).`,
 		`Ideas for this track: ${pick(TWISTS, 2).join('; ')}.`
 	);
 	if (req.previous) {

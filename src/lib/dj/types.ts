@@ -2,7 +2,8 @@ export const LAYERS = ['kick', 'hats', 'perc', 'bass', 'synth', 'vox'] as const;
 export type LayerName = (typeof LAYERS)[number];
 export type Layers = Record<LayerName, string>;
 
-export type GenreId = 'minimal' | 'acid' | 'hard' | 'dub' | 'detroit' | 'hypnotic';
+export type GenreId =
+	'minimal' | 'acid' | 'hard' | 'dub' | 'detroit' | 'hypnotic' | 'french' | 'psy' | 'hardbass';
 
 export interface Track {
 	id: string;
