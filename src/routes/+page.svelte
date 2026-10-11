@@ -54,7 +54,10 @@
 		<Queue {dj} />
 	</div>
 
-	<footer>Built with Strudel (AGPL-3.0). Audio starts after you click — turn it up.</footer>
+	<footer>
+		Built with Strudel (AGPL-3.0). Audio starts after you click — turn it up.<br />
+		Made by <a href="https://konieczka.dev">konieczka.dev</a>
+	</footer>
 </main>
 
 <style>
