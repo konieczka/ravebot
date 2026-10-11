@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CRATE_TITLES } from '../crate-titles';
 import { GENRES } from '../genres';
 import { LAYERS } from '../types';
 
@@ -12,6 +13,14 @@ describe('local crate', () => {
 	it('has unique titles', () => {
 		const titles = seeds.map((s) => s.title.toLowerCase());
 		expect(titles.filter((t, i) => titles.indexOf(t) !== i)).toEqual([]);
+	});
+
+	it('names crate remixes uniquely, apart from the seeds', () => {
+		const titles = [...seeds.map((s) => s.title), ...Object.values(CRATE_TITLES).flat()].map((t) =>
+			t.toLowerCase()
+		);
+		expect(titles.filter((t, i) => titles.indexOf(t) !== i)).toEqual([]);
+		for (const genre of GENRES) expect(CRATE_TITLES[genre.id].length, genre.id).toBeGreaterThan(10);
 	});
 
 	it('never repeats a bassline or melody', () => {

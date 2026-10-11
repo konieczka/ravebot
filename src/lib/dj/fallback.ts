@@ -1,38 +1,30 @@
+import { CRATE_TITLES } from './crate-titles';
 import { GENRES, genreById } from './genres';
 import { LAYERS, type GenreId, type LayerName, type Layers, type Track } from './types';
 
 const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
-const TITLE_A = [
-	'Binary',
-	'Neon',
-	'Warehouse',
-	'Circuit',
-	'Midnight',
-	'Chrome',
-	'Static',
-	'Voltage',
-	'Pixel',
-	'Bunker'
-];
-const TITLE_B = [
-	'Ritual',
-	'Drift',
-	'Pressure',
-	'Loop',
-	'Engine',
-	'Signal',
-	'Fever',
-	'Protocol',
-	'Haze',
-	'Machine'
-];
 const SHOUTS = [
 	'Backup routine engaged. Still bangs.',
 	'Brain offline, hands on the faders.',
 	'Running on pure muscle memory!',
 	'Recycling the classics, beep boop.'
 ];
+
+/** Crate titles already played this session, so a remix name does not come back until its genre runs out. */
+const usedTitles = new Set<string>();
+
+function crateTitle(genre: GenreId): string {
+	const titles = CRATE_TITLES[genre];
+	let fresh = titles.filter((t) => !usedTitles.has(t));
+	if (!fresh.length) {
+		for (const t of titles) usedTitles.delete(t);
+		fresh = titles;
+	}
+	const title = pick(fresh);
+	usedTitles.add(title);
+	return title;
+}
 
 /** Layers that carry pitch: they always come from the same seed so the key stays consistent. */
 const TONAL = new Set<LayerName>(['bass', 'synth', 'vox']);
@@ -63,7 +55,7 @@ export function fallbackTrack(genre: GenreId, previous?: Layers): Track {
 	}
 	return {
 		id: crypto.randomUUID(),
-		title: `${pick(TITLE_A)} ${pick(TITLE_B)}`,
+		title: crateTitle(genre),
 		comment: pick(SHOUTS),
 		genre,
 		layers,
