@@ -1,3 +1,6 @@
+import { validateLayer } from '#lib/dj/validate.js';
+import { inspectPattern, yieldToMain } from './prepare.js';
+import { AudioScheduler } from './scheduler.js';
 import { fitsHarmony, type HarmonyId } from '#lib/dj/harmony.js';
 import type { Pattern, StrudelRepl } from '@strudel/web';
 import { LAYERS, type Layers } from '#lib/dj/types.js';
@@ -21,6 +24,7 @@ let repl: StrudelRepl | null = null;
 let web: typeof import('@strudel/web') | null = null;
 let lastEvalError: Error | null = null;
 let desk: MixDesk | null = null;
+let scheduler: AudioScheduler | null = null;
 
 export async function initEngine(): Promise<void> {
 	if (repl) return;
@@ -33,10 +37,7 @@ export async function initEngine(): Promise<void> {
 				// Hardbass shouts, bundled with the app (see voices.ts).
 				web!.samples({ rus: RUS_FILES }, RUS_BASE)
 			]),
-		onEvalError: (err) => (lastEvalError = err),
-		// Keep the scheduler ticking at full rate when the tab is hidden or unfocused (see timer.ts).
-		setInterval: setWorkerInterval,
-		clearInterval: clearWorkerInterval
+		onEvalError: (err) => (lastEvalError = err)
 	});
 	await web.getAudioContext().resume();
 	// Strudel loads its AudioWorklets (djf, shape, crush, ...) on the first mousedown *after*
@@ -46,12 +47,19 @@ export async function initEngine(): Promise<void> {
 	document.dispatchEvent(new MouseEvent('mousedown'));
 	await ready;
 	// Splice the mixing desk (bus processing, master chain) into superdough before anything plays.
-	desk = new MixDesk(
-		web.getAudioContext(),
-		web.getSuperdoughAudioController() as AudioController,
-		web.webAudioTimeout
-	);
+	desk = new MixDesk(web.getAudioContext(), web.getSuperdoughAudioController() as AudioController);
 	desk.install();
+	scheduler = new AudioScheduler(
+		() => web!.getAudioContext().currentTime,
+		(hap, at, duration, cps) => {
+			hap.ensureObjectValue();
+			void web!
+				.superdough(hap.value, at, duration, cps, hap.whole!.begin.valueOf())
+				.catch((error) => console.error('Audio trigger failed:', error));
+		},
+		setWorkerInterval,
+		clearWorkerInterval
+	);
 	if (import.meta.env.DEV) (globalThis as any).__ravebotDesk = desk;
 	// Create every deck orbit up front with a silent note. The kick ducks its deck's music and vox
 	// orbits, and superdough logs an error on every kick while a target orbit does not exist yet
@@ -93,8 +101,11 @@ export async function play(code: string): Promise<void> {
 	if (!repl) throw new Error('engine not initialised');
 	lastEvalError = null;
 	desk?.ensureMaster();
-	const pattern = await repl.evaluate(code);
+	// Compile with Strudel, but leave its short-lookahead scheduler stopped.
+	const pattern = await repl.evaluate(code, false);
 	if (!pattern) throw lastEvalError ?? new Error('evaluation failed');
+	web!.setTime(() => scheduler!.now());
+	scheduler!.setPattern(pattern);
 }
 
 /** Sets each deck's bus processing and the master bus from the genres' mix profiles. */
@@ -111,15 +122,22 @@ export function setMix(
 }
 
 export function stop(): void {
+	scheduler?.stop();
+	desk?.resetDucking();
 	repl?.stop();
 }
 
 /** Current position in cycles (= bars). */
 export function now(): number {
-	return repl?.scheduler.started ? repl.scheduler.now() : 0;
+	return scheduler?.now() ?? 0;
+}
+
+export function scheduledCycle(): number {
+	return scheduler?.scheduledCycle ?? 0;
 }
 
 export function setBpm(bpm: number): void {
+	scheduler?.setCps(bpm / 60 / 4);
 	repl?.scheduler.setCps(bpm / 60 / 4);
 }
 
@@ -136,7 +154,7 @@ async function compile(code: string): Promise<Pattern> {
 }
 
 /**
- * Compiles each layer and queries 16 bars without playing them. Catches runtime errors
+ * Validates each layer and queries 16 bars in one-beat tasks without playing them. Catches runtime errors
  * (unknown methods, bad mini-notation), empty patterns and sounds that do not exist.
  * Also preloads the track's samples. Returns a map of layer -> problem; empty when the track
  * is safe to mix in.
@@ -152,13 +170,9 @@ export async function dryRun(
 		const code = layers[layer];
 		if (code === 'silence') continue;
 		try {
-			const pattern = await compile(code);
-			const haps = pattern.queryArc(0, 16).filter((h) => h.hasOnset());
-			if (!haps.length) {
-				problems[layer] = 'pattern produced no events';
-				continue;
-			}
-			for (const hap of haps) {
+			await yieldToMain();
+			const pattern = await compile(validateLayer(code, layer));
+			await inspectPattern(pattern, (hap) => {
 				const { value } = hap;
 				if (harmony && !fitsHarmony(harmony, layer, value, hap.whole!.begin.valueOf()))
 					throw new Error('notes do not follow the shared harmonic plan');
@@ -183,10 +197,13 @@ export async function dryRun(
 							: null;
 				if (!s) throw new Error('event has no sound');
 				const name = typeof value.bank === 'string' ? `${value.bank}_${s}` : s;
-				if (!web.getSound(name)) throw new Error(`unknown sound "${name}"`);
+				if (!web!.getSound(name)) throw new Error(`unknown sound "${name}"`);
 				const key = `${name}:${value.n ?? 0}`;
-				if (!loads.has(key)) loads.set(key, preload(name, value));
-			}
+				if (!loads.has(key)) {
+					// Preparation yields between queries, so handle download failures immediately.
+					loads.set(key, preload(name, value)?.catch(() => null) ?? null);
+				}
+			});
 		} catch (e) {
 			problems[layer] = (e as Error).message;
 		}

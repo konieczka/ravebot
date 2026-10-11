@@ -1,8 +1,6 @@
-/**
- * setInterval/clearInterval backed by a Web Worker. Browsers throttle main-thread timers in hidden
- * or unfocused tabs (to ~1 Hz), but not timers inside a worker. Strudel's scheduler ticks every
- * 100 ms with a 200 ms lookahead and drops any slice it reaches too late, so on a throttled timer
- * most events vanish: whole layers seem to drop out until the tab is visible again.
+/** Worker wakeups avoid ordinary background timer throttling. Callbacks still run on the
+ * main thread; the audio scheduler must submit events ahead of time to tolerate stalls.
+ * Mobile browsers may suspend workers and audio altogether while backgrounded.
  */
 
 const WORKER_SOURCE = `

@@ -1,3 +1,4 @@
+import { DuckEnvelope } from './duck.js';
 import { BASE_MIX, type MixProfile } from '#lib/dj/mix.js';
 import { BUSES, busOrbit, type BusName } from './mixer.js';
 
@@ -39,8 +40,6 @@ export interface AudioController {
 	};
 	getOrbit(orbit: number, channels?: number[]): Orbit;
 }
-
-type Timeout = (ac: AudioContext, cb: () => void, start: number, stop: number) => void;
 
 const db = (x: number) => 10 ** (x / 20);
 const BUTTERWORTH = Math.SQRT1_2;
@@ -547,11 +546,11 @@ export class MixDesk {
 	private profiles: [MixProfile, MixProfile] = [BASE_MIX, BASE_MIX];
 	private masterProfile = BASE_MIX;
 	private meter: Meter | null = null;
+	private duckEnvelopes = new Map<AudioParam, DuckEnvelope>();
 
 	constructor(
 		private ac: AudioContext,
-		private controller: AudioController,
-		private timeout: Timeout
+		private controller: AudioController
 	) {}
 
 	/** Splices the desk into superdough. Call once after init, before any sound plays. */
@@ -635,23 +634,14 @@ export class MixDesk {
 			if (!desk.bypassed && bus?.upperDuck)
 				params.push([bus.upperDuck, depth * (bus.fullDuck ?? 0)]);
 			const ac = this.audioContext;
-			desk.timeout(
-				ac,
-				() => {
-					const now = ac.currentTime;
-					for (const [param, amount] of params) {
-						const current = param.value;
-						param.cancelScheduledValues(now);
-						param.setValueAtTime(current, now);
-						const t0 = Math.max(t, now);
-						const ducked = Math.min(Math.max(1 - Math.sqrt(Math.max(0, amount)), 0.01), current);
-						param.exponentialRampToValueAtTime(ducked, t0 + onset);
-						param.exponentialRampToValueAtTime(1, t0 + onset + Math.max(attack, 0.002));
-					}
-				},
-				0,
-				t - 0.01
-			);
+			for (const [param, amount] of params) {
+				let envelope = desk.duckEnvelopes.get(param);
+				if (!envelope) {
+					envelope = new DuckEnvelope(param);
+					desk.duckEnvelopes.set(param, envelope);
+				}
+				envelope.schedule(ac.currentTime, t, onset, attack, amount);
+			}
 		};
 	}
 
@@ -695,7 +685,12 @@ export class MixDesk {
 		return this.bypassed;
 	}
 
+	resetDucking() {
+		for (const envelope of this.duckEnvelopes.values()) envelope.reset(this.ac.currentTime);
+	}
+
 	private applyBypass() {
+		this.resetDucking();
 		const on = this.bypassed;
 		const set = (wet: GainNode, dry: GainNode) => {
 			smooth(wet.gain, on ? 0 : 1, this.ac);

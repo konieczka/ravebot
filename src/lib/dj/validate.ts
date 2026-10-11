@@ -1,3 +1,4 @@
+import { checkWorkload } from './workload';
 import { parse, type Node } from 'acorn';
 import { LAYERS, type LayerName, type Layers } from './types';
 
@@ -382,6 +383,7 @@ export function validateLayer(code: string, role?: LayerName): string {
 		expr = (parse(src, { ecmaVersion: 2022, sourceType: 'script' }) as any).body[0].expression;
 	}
 	if (role) lint(expr, role);
+	checkWorkload(expr);
 	return src;
 }
 

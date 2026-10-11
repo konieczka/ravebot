@@ -4,9 +4,10 @@ declare module '@strudel/web' {
 		value: Record<string, unknown>;
 		whole: { begin: { valueOf(): number }; end: { valueOf(): number } } | null;
 		hasOnset(): boolean;
+		ensureObjectValue(): void;
 	}
 	export interface Pattern {
-		queryArc(begin: number, end: number): Hap[];
+		queryArc(begin: number, end: number, controls?: Record<string, unknown>): Hap[];
 	}
 	export interface StrudelRepl {
 		evaluate(code: string, autostart?: boolean): Promise<Pattern | undefined>;
@@ -26,20 +27,17 @@ declare module '@strudel/web' {
 	): Promise<void>;
 	export function getAudioContext(): AudioContext;
 	export function getSuperdoughAudioController(): unknown;
-	export function webAudioTimeout(
-		ac: AudioContext,
-		onComplete: () => void,
-		startTime: number,
-		stopTime: number
-	): void;
 	export function initAudioOnFirstClick(options?: object): Promise<void>;
 	export function getSound(name: string): unknown;
 	export function getSampleBuffer(value: object, samples: unknown): Promise<unknown>;
+	export function setTime(time: () => number): void;
 	export function signal(fn: (t: number) => unknown): Pattern;
 	export function superdough(
 		value: Record<string, unknown>,
 		time: number,
-		duration: number
+		duration: number,
+		cps?: number,
+		cycle?: number
 	): Promise<void>;
 	export function transpiler(code: string, options?: object): { output: string };
 }

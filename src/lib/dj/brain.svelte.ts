@@ -315,7 +315,7 @@ export class DjBrain {
 		// Start on the next 4-bar phrase (next bar when skipping), with a little headroom for evaluation.
 		const grid = french ? PHRASE_BARS : skip ? 1 : 4;
 		const origin = this.mixer.timelines[from]!.origin;
-		const start = transitionStart(c, origin, grid);
+		const start = transitionStart(Math.max(c, engine.scheduledCycle()), origin, grid);
 
 		const decks: [Track | null, Track | null] = [...this.decks];
 		decks[to] = incoming;

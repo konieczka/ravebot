@@ -138,3 +138,26 @@ describe('repairBrackets', () => {
 		);
 	});
 });
+
+describe('playback workload limits', () => {
+	it.each([
+		"s('hh*4096')",
+		"s('hh/0.0001')",
+		"s('hh(2, 4096)')",
+		"s('hh*<1 4096>')",
+		"s('hh*32').fast(32)",
+		"s('hh').fast(1024)",
+		"s('hh').fast(32*32)",
+		"s('hh').fast(32).ply(32)",
+		"s('hh').fast(1/0)",
+		"s('hh').slow(.00001)",
+		"s('hh').fast(sine.range(1, 1000))",
+		"s('hh(2,4096)')",
+		"s('[[hh*32]*32]*32')",
+		"note('c3').s('sawtooth').unison(128)",
+		"note('c3').release(60)",
+		"s('hh').ply('<1 4096>')"
+	])('rejects excessive work before compilation: %s', (code) => {
+		expect(() => validateLayer(code)).toThrow();
+	});
+});
