@@ -124,4 +124,17 @@ describe('repairBrackets', () => {
 			"note('<[~ c1]*4 [~ g0]*4>').s('sine')"
 		);
 	});
+
+	it('rejects sample names inside note()', () => {
+		expect(() =>
+			validateLayer("note('<speakspell:0 ~ ~ ~>').s('sawtooth').vowel('a')", 'vox')
+		).toThrow(/note\(\) takes note names/);
+		expect(validateLayer("note('[c#3,eb3,gb3] bb2 <f1 ~>').s('sawtooth')", 'synth')).toBeTruthy();
+	});
+
+	it('requires a quoted sound name in s()', () => {
+		expect(() => validateLayer("note('[~ e1 e1 e1]*4').s(square)", 'bass')).toThrow(
+			/quoted sound name/
+		);
+	});
 });

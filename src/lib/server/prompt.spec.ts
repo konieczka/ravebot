@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildMessages, extractJson } from './prompt';
+import { buildMessages, extractJson, pickStyle } from './prompt';
+import { GENRES } from '#lib/dj/genres.js';
 
 describe('extractJson', () => {
 	it('strips think blocks and code fences', () => {
@@ -36,5 +37,26 @@ describe('buildMessages', () => {
 		expect(user.content).toMatch(/Acid/);
 		expect(user.content).toMatch(/Energy: 8\/10/);
 		expect(user.content).toMatch(/"Prev"/);
+		expect(user.content).toMatch(/Style for this track: /);
+	});
+});
+
+describe('pickStyle', () => {
+	const styles = ['a', 'b', 'c', 'bold'];
+
+	it('never picks the experimental style at low weirdness', () => {
+		for (let i = 0; i < 50; i++) expect(pickStyle(styles, 2, () => i / 50)).not.toBe('bold');
+	});
+
+	it('favours the experimental style at high weirdness', () => {
+		expect(pickStyle(styles, 9, () => 0.1)).toBe('bold');
+		expect(pickStyle(styles, 9, () => 0.9)).not.toBe(undefined);
+	});
+
+	it('gives every genre several styles with an experimental one last', () => {
+		for (const g of GENRES) {
+			expect(g.styles.length, g.id).toBeGreaterThanOrEqual(4);
+			expect(g.styles.at(-1)!.name, g.id).toMatch(/experimental/);
+		}
 	});
 });

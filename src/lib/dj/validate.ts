@@ -199,6 +199,9 @@ const ROLE_SOUNDS: Record<LayerName, (name: string) => boolean> = {
 const soundNames = (mini: string) =>
 	(mini.replace(/\([^)]*\)/g, ' ').match(/[a-z][a-z0-9]*/gi) ?? []).filter((t) => !/^\d/.test(t));
 
+/** A pitch token as soundNames() splits it: 'eb3', 'c' (from 'c#3'), 'bb'. */
+const NOTE_NAME = /^[a-g][bsf]*\d*$/i;
+
 const SIGNALS = new Set(['sine', 'cosine', 'saw', 'tri', 'square', 'perlin', 'rand', 'arc']);
 
 const CLOSER: Record<string, string> = { '[': ']', '<': '>', '(': ')', '{': '}' };
@@ -283,6 +286,10 @@ function lint(expr: Node, role: LayerName): void {
 			const name = callee.type === 'Identifier' ? callee.name : callee.property?.name;
 			const arg = node.arguments[0];
 			const str = arg?.type === 'Literal' && typeof arg.value === 'string' ? arg.value : null;
+			if ((name === 's' || name === 'sound') && str === null && arg?.type !== 'TemplateLiteral')
+				throw new ValidationError(
+					`${name}() takes a quoted sound name like s('sawtooth'), not ${arg?.type === 'Identifier' ? arg.name : 'an expression'}`
+				);
 			if ((name === 's' || name === 'sound') && str !== null) {
 				if (/(^|[\s,[<])\d+(?=[\s,\]>]|$)/.test(str.replace(/\([^)]*\)/g, '')))
 					throw new ValidationError(
@@ -291,6 +298,14 @@ function lint(expr: Node, role: LayerName): void {
 				sounds.push(...soundNames(str));
 			}
 			if (name === 'note' || name === 'n') hasNotes = true;
+			// note() takes pitches only; a sample name there ('speakspell:0') fails at play time.
+			if (name === 'note' && str !== null) {
+				const bad = soundNames(str).find((t) => !NOTE_NAME.test(t));
+				if (bad)
+					throw new ValidationError(
+						`note() takes note names like c3, eb2 or f#1, not "${bad}"; play samples with s(...)`
+					);
+			}
 			if (name === 'n') usesN = true;
 			if (name === 'scale') usesScale = true;
 			if (name === 'bank') {

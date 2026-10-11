@@ -49,16 +49,19 @@ Modulation signals: sine saw tri perlin rand -> .range(lo,hi).slow(8), e.g. .lpf
 Pattern transforms: .fast(2) .slow(2) .rev() .ply(2) .degradeBy(.3) .sometimesBy(.3, x => x.speed(2))
   .every(4, x => x.fast(2)) .off(1/8, x => x.add(note(12))) .jux(rev) .struct('x ~ x x') .mask('<1 [1 0]>')
   .lastOf(8, x => x.ply(2)) (a fill in the last bar of every 8)   .swingBy(1/6, 8) (16th swing)
+  .iter(4) .chunk(4, x => x.add(note(12))) .superimpose(x => x.add(note(12))) .palindrome() .late(1/32)
+  Phrase-level variation (track time): note('<[c3,eb3,g3,bb3]!7 [bb2,d3,f3,ab3]>') holds a chord 7 bars then answers on bar 8
   Filter envelope (acid plucks): .lpf(300).lpenv(4).lpa(.01).lpd(.12).lpq(14)
   FM and pitch envelope (zaps): .fm(4).fmh(1.5) .penv(12).pdecay(.05)
   Hollow FM "donk" bass: note('[~ a1]*4').s('sine').fm(3).fmh(2).fmwave('triangle').fmdecay(.12).fmsustain(.25).decay(.3).sustain(0)
   Warm analog sound (sounds far less like MIDI than a bare oscillator):
     .ftype('ladder') a 24 dB Moog/303-style low-pass for .lpf (lpq 0-20, 25+ screams), .drive(1) to push it
     supersaw: .unison(7).detune(.25).spread(.8) (voices, detune, stereo spread)
-    pulse: note('a3').s('pulse').pw(.3) (pulse width .1-.9, hollow and nasal)
+    pulse: note('a3').s('pulse').pw(.3) (pulse width .1-.9, hollow and nasal); PWM: .pw(sine.range(.2,.8).slow(8))
     .noise(.08) breath and grit on an oscillator
     Layered bass: stack(note('a1').s('sine'), note('a1').s('sawtooth').hpf(180).lpf(900)) clean sub + gritty top
-    Long dark reverb: .room(.6).roomsize(4).roomlp(3000)
+    FM colours: .fmh(1) Rhodes keys, .fmh(2.01) shimmer, non-integer .fmh(1.41) or .fmh(3.5) clangorous metal and bells
+    Long dark reverb: .room(.6).roomsize(4).roomlp(3000)   Dub echo: .delay(.6).delaytime(.375).delayfeedback(.75) (seconds; repeats darken like tape)
   .phaser(2) (swirling disco loop)  .vib(6).vibmod(.3) (vibrato, e.g. whistles)
   Short tight kick: s('bd*4').bank('RolandTR909').decay(.15).sustain(0)
 Combine: stack(a, b)  cat(a, b)
@@ -71,9 +74,14 @@ RULES
 - '~' is a rest and stands alone: 'cp ~ cp' (never 'cp~').
 - Signals are not functions: saw.range(300,900) (never saw(300,900)). Only use methods listed above.
 - Keep levels sane: kick gain <= 1, hats .2-.6, synth .1-.35, vox .3-.7. Bass and kick must not fight (bass on off-beats or short notes).
+- Match the gain levels of the FORMAT REFERENCE layer by layer: the engine's mix is calibrated to them. Stacking more voices in a layer means less gain per voice.
+- Make the melodic layers musical: real, voice-led chord progressions in '<...>', hooks, call and response across 2-4 bars. The engine brings melodies forward, so they matter.
+- CPU budget (two decks play at once): at most two of shape/distort/crush/coarse/ftype('ladder') per layer, never a ladder on dense chords, supersaw unison <= 7, chords of at most 4 notes.
 - The engine mixes the track like a studio: it swings and humanizes the hats, drifts the synths, compresses, EQs, adds sub rumble and masters it. Do not fake those with long effect chains; spend your effort on good patterns and sound design.
 - Write every layer as a full-energy loop. The DJ engine arranges the track for you: it brings layers in one by one, strips them for the breakdown, adds snare rolls, risers and the drop. Never try to arrange with long masks.
-- Vox is sparse: one shot every 4-8 bars, with delay/room. Silence most of the time.
+- Vox is sparse: one shot every 4-8 bars, with delay/room. Silence most of the time. A bare s('rave:0') plays EVERY bar: always place shots in a phrase like s('<rave:0 ~ ~ ~ ~ ~ ~ ~>').
+- Chords use commas: '[c3,eb3,g3,bb3]' sounds together. Spaces make a sequence: '[c3 eb3 g3 bb3]' is a fast arpeggio, '<c3 eb3 g3>' one note per bar.
+- note() takes only pitches (c3, eb2, f#1 or numbers). Samples like speakspell:0 or rave:4 only work in s(...).
 `.trim();
 
 const LAYER_ROLES = `
@@ -89,6 +97,12 @@ Layers (the DJ mixer crossfades each one separately, so every sound must sit in 
 /** Random constraints per request: small models otherwise keep re-emitting the example track. */
 const KEYS = ['C', 'D', 'E', 'F', 'G', 'A', 'Bb'];
 const TWISTS = [
+	"bass: a ladder filter (.ftype('ladder')) whose resonance wanders on slow perlin",
+	'synth: a PWM pulse part with .pw(sine.range(.2, .8).slow(8))',
+	'synth: hold one chord for 7 bars and answer it on bar 8 with <chord!7 other>',
+	'perc: put each line on its own polymeter length ({...}%16 with 5, 7 or 11 steps)',
+	'synth: FM bells or metal (.fmh(3.5)) in a long dark delay',
+	'bass: stack a clean sine sub with a high-passed gritty top',
 	'hats: use a euclidean rhythm such as hh(5,8) or hh(7,16)',
 	'hats: off-beat open hats with 16th closed hats underneath',
 	'perc: add toms (lt/mt/ht) in euclidean rhythms',
@@ -112,6 +126,17 @@ const TWISTS = [
 const pick = <T>(xs: readonly T[], n: number): T[] =>
 	[...xs].sort(() => Math.random() - 0.5).slice(0, n);
 
+/**
+ * One sub-style per track keeps a set varied. The last style of each genre is the experimental
+ * one: favoured at high weirdness, never picked at low weirdness.
+ */
+export function pickStyle<T>(styles: readonly T[], weirdness: number, rnd = Math.random): T {
+	const bold = styles.length - 1;
+	if (weirdness >= 7 && rnd() < 0.6) return styles[bold];
+	const pool = weirdness <= 3 ? styles.slice(0, bold) : styles;
+	return pool[Math.floor(rnd() * pool.length)];
+}
+
 /** JSON schema handed to the gateway, so constrained decoding guarantees the reply shape. */
 export const TRACK_SCHEMA = {
 	type: 'object',
@@ -132,6 +157,7 @@ export function buildMessages(req: GenerateRequest) {
 	const example = genre.seeds[Math.floor(Math.random() * genre.seeds.length)];
 	const key = pick(KEYS, 1)[0];
 	const mode = pick(genre.modes ?? ['minor'], 1)[0];
+	const style = pickStyle(genre.styles, req.weirdness);
 
 	const system = [
 		'You are RaveBot, a robot DJ who live-codes techno and rave tracks in Strudel (a JavaScript port of TidalCycles).',
@@ -150,7 +176,8 @@ export function buildMessages(req: GenerateRequest) {
 	];
 	lines.push(
 		`Key: ${key} ${mode} (bass in octave 1-2, synth in octave 3-5).`,
-		`Ideas for this track: ${pick(TWISTS, 2).join('; ')}.`
+		`Style for this track: ${style.name}: ${style.recipe}. Use it as the starting idea, in the key above, with your own patterns.`,
+		`Extra idea: ${pick(TWISTS, 1)[0]}.`
 	);
 	if (req.previous) {
 		lines.push(
