@@ -16,6 +16,7 @@ import {
 	twinkle,
 	type City
 } from './view.js';
+import { BELLE_EPOQUE } from './paris-room.js';
 
 /**
  * Paris: the Eiffel Tower lit gold on the right (it sparkles on the downbeat and its beacon sweeps
@@ -222,7 +223,7 @@ export const PARIS: City = {
 		['VIVE', 'LA', 'TECHNO'],
 		['SOUS', 'LES', 'PAVÉS', 'LA RAVE']
 	],
-	plant: 'CENTRALE',
+	room: BELLE_EPOQUE,
 	sticker,
 	paint,
 	live

@@ -16,6 +16,7 @@ import {
 	twinkle,
 	type City
 } from './view.js';
+import { POWER_STATION } from './berlin-room.js';
 
 /**
  * Berlin: the Oberbaum bridge crosses the Spree with a U1 on it, the Fernsehturm and a gasometer
@@ -203,7 +204,7 @@ export const BERLIN: City = {
 		['TECHNO', 'PEOPLE', 'BETTER', 'HUMANS'],
 		['BERLIN', 'NEVER', 'SLEEPS']
 	],
-	plant: 'KRAFTWERK',
+	room: POWER_STATION,
 	sticker,
 	paint,
 	live

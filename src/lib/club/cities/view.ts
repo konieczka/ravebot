@@ -1,4 +1,5 @@
 import { bayer, canvas, clamp, disc, glow, hash, px, ramp, rgba, rng, type Ctx } from '../draw.js';
+import type { Room } from './room.js';
 
 /**
  * The view through the club's back window, shared by every city: the window and its frame, and the
@@ -29,8 +30,8 @@ export interface City {
 	neon: [Neon, Neon];
 	/** The banners hanging either side of the stage. */
 	banners: [string[], string[]];
-	/** Stencil on the old power station's control panel. */
-	plant: string;
+	/** The club around the stage: walls, balconies and what stands under them. */
+	room: Room;
 	/** Paints the city's landmark into the booth sticker, centred on `cx`, between `top` and `top + 20`. */
 	sticker(g: Ctx, cx: number, top: number, ink: string): void;
 	/** Paints the static city into the window. */

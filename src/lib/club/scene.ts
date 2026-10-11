@@ -1,6 +1,7 @@
 import type { SectionKind } from '#lib/dj/arrangement.js';
 import { LAYERS, type LayerName } from '#lib/dj/types.js';
 import { city, type City, type StageId } from './cities/index.js';
+import { TIERS } from './cities/room.js';
 import { LINE_ARRAYS, WIN, windowFrame } from './cities/view.js';
 import {
 	H,
@@ -72,21 +73,11 @@ type Envelopes = Record<LayerName, number>;
 const PINK = '#ff3dc8';
 const BLUE = '#56a8ff';
 const CYAN = '#56c8ff';
-const TIERS = [54, 98, 142];
 
 // ── static layers ───────────────────────────────────────────────────────────
 
-/** Text on the balcony walls: lamps keep clear of it. */
-const WALL_TEXT = [
-	[38, 58, 30, 26],
-	[410, 54, 38, 32],
-	[14, 102, 38, 30],
-	[434, 102, 40, 30]
-];
 /** CO2 cannon nozzles, between the LED tubes on the sub stacks. */
 const CO2_X = [116, 364];
-/** Ceiling lamps hanging over the side walls. */
-const CAGE_LAMPS = [24, 80, 400, 456];
 
 function buildBackground(town: City) {
 	const [c, g] = canvas();
@@ -94,73 +85,7 @@ function buildBackground(town: City) {
 	px(g, 0, 0, W, H, '#07040d');
 	town.paint(g);
 
-	const sides = [
-		[0, 104],
-		[376, 480]
-	] as const;
-	const warm = (x: number, y: number, r: number, a: number) => {
-		g.globalCompositeOperation = 'lighter';
-		glow(g, x, y, r, '#ff9a4a', a);
-		g.globalCompositeOperation = 'source-over';
-	};
-
-	for (const [x0, x1] of sides) {
-		const w = x1 - x0;
-		concrete(g, R, x0, 0, w, 200, '#100b1c', '#0a0714', '#1a1428');
-		formwork(g, R, x0, 0, w, 200);
-
-		// Ceiling: a riveted girder with cage lamps hanging off it.
-		px(g, x0, 0, w, 12, '#06040b');
-		for (let x = x0 + 6; x < x1; x += 16) line(g, x, 0, x + 8, 7, 1, '#141022');
-		px(g, x0, 7, w, 3, '#1a1428');
-		px(g, x0, 7, w, 1, '#2e2644');
-		for (let x = x0 + 2; x < x1; x += 6) px(g, x, 8, 1, 1, '#3a3152');
-
-		// Balcony bays: concrete back wall, steel columns, a pipe run, bulkhead lamps.
-		for (const ty of TIERS) {
-			const top = ty - 40;
-			px(g, x0, top, w, 38, '#0c0818');
-			formwork(g, R, x0, top, w, 38);
-			px(g, x0, top + 3, w, 2, '#241c36');
-			px(g, x0, top + 3, w, 1, '#3a3052');
-			for (let x = x0 + 4; x < x1; x += 24) px(g, x, top + 2, 2, 4, '#2e2644');
-			for (let x = x0 + 12; x < x1 - 2; x += 32) {
-				px(g, x, top, 5, 38, '#15102a');
-				px(g, x, top, 1, 38, '#2a2244');
-				px(g, x + 4, top, 1, 38, '#1f1936');
-				px(g, x + 2, top, 1, 38, '#1b1530');
-				for (const y of [top + 1, top + 35]) {
-					px(g, x + 1, y, 1, 1, '#4a4068');
-					px(g, x + 3, y, 1, 1, '#4a4068');
-				}
-			}
-			for (let x = x0 + 28; x < x1; x += 32) {
-				const y = top + 11;
-				if (
-					WALL_TEXT.some(([bx, by, bw, bh]) => x > bx && x < bx + bw && y > by - 4 && y < by + bh)
-				)
-					continue;
-				px(g, x - 2, y - 1, 5, 4, '#2a1e18');
-				px(g, x - 1, y, 3, 2, '#ffcf8a');
-				px(g, x - 1, y, 1, 2, '#3a2a18');
-				px(g, x + 1, y, 1, 2, '#3a2a18');
-				warm(x + 0.5, y + 1, 12, 0.2);
-			}
-		}
-		for (const ty of TIERS) {
-			px(g, x0, ty, w, 4, '#2b2342');
-			px(g, x0, ty, w, 1, '#463a66');
-			for (let x = x0 + 3; x < x1; x += 8) px(g, x, ty + 2, 1, 1, '#4a3e66');
-			px(g, x0, ty + 4, w, 2, '#06040b');
-		}
-		for (const lx of CAGE_LAMPS)
-			if (lx > x0 && lx < x1) {
-				px(g, lx, 10, 1, 3, '#1a1428');
-				px(g, lx - 2, 13, 5, 2, '#2a2238');
-				px(g, lx - 1, 15, 3, 1, '#ffd08a');
-				warm(lx + 0.5, 16, 14, 0.25);
-			}
-	}
+	town.room.paint(g);
 
 	// Small wall banners.
 	px(g, 16, 104, 34, 26, '#09070d');
@@ -169,9 +94,6 @@ function buildBackground(town: City) {
 	px(g, 436, 104, 36, 26, '#09070d');
 	px(g, 436, 104, 36, 1, '#2a2535');
 	['BASS', 'UNITY', 'FREEDOM'].forEach((s, i) => textC(g, s, 454, 107 + i * 7, '#cfc8e6'));
-
-	controlPanel(g, town.plant);
-	generatorAndExit(g);
 
 	// Concrete pillars with tags and stickers.
 	for (const x of [104, 354]) {
@@ -241,110 +163,6 @@ function buildBackground(town: City) {
 	g.fillStyle = gr;
 	g.fillRect(0, 186, W, H - 186);
 	return c;
-}
-
-/** The building was a power station: its old control panel and a generator still stand under the balconies. */
-const GAUGES: Pt[] = [
-	[17, 167],
-	[37, 167],
-	[57, 167],
-	[77, 167]
-];
-const PANEL_LAMPS = Array.from({ length: 10 }, (_, k) => 12 + k * 7);
-const FLYWHEEL: Pt = [431, 168];
-const PRESSURE: Pt = [400, 155];
-const BEACON: Pt = [415, 157];
-
-/** Left: the control panel, painted green-grey steel with four gauges, lamps and a knife switch. */
-function controlPanel(g: Ctx, label: string) {
-	px(g, 4, 148, 96, 39, '#0a0810');
-	px(g, 6, 149, 92, 37, '#17131f');
-	px(g, 6, 149, 92, 1, '#2c2638');
-	px(g, 6, 149, 1, 37, '#221d2c');
-	px(g, 97, 149, 1, 37, '#0e0b14');
-	for (const x of [8, 95]) for (const y of [151, 183]) px(g, x, y, 1, 1, '#3e3650');
-	text(g, label, 10, 152, '#6e5e3e');
-	px(g, 10, 158, 70, 1, '#0f0c16');
-	for (const [x, y] of GAUGES) {
-		disc(g, x, y, 7, '#0a0810');
-		disc(g, x, y, 6, '#5c566a');
-		for (let k = 0; k <= 6; k++) {
-			const a = Math.PI * (0.85 + (1.3 * k) / 6);
-			px(g, x + Math.cos(a) * 5, y + Math.sin(a) * 5, 1, 1, k >= 5 ? '#8a2a3a' : '#2a2634');
-		}
-		px(g, x - 3, y + 8, 7, 2, '#3e3850');
-		px(g, x - 2, y + 8, 5, 1, '#24202e');
-	}
-	for (const x of PANEL_LAMPS) {
-		px(g, x - 1, 179, 4, 4, '#0a0810');
-		px(g, x, 180, 2, 2, '#1c1824');
-	}
-	// Knife switch, thrown.
-	px(g, 86, 160, 9, 16, '#0f0c16');
-	px(g, 86, 160, 9, 1, '#2c2638');
-	for (const x of [88, 92]) px(g, x, 162, 1, 12, '#4a3e30');
-	line(g, 88, 173, 90, 163, 1, '#6a6478');
-	line(g, 92, 173, 94, 163, 1, '#6a6478');
-	px(g, 89, 162, 6, 2, '#1a1a1a');
-	// Hazard sign: lightning in a yellow triangle.
-	for (let y = 0; y < 6; y++) px(g, 88 - y / 2 + 3, 151 + y, y + 1, 1, '#8a7030');
-	px(g, 91, 153, 1, 2, '#14111c');
-	px(g, 90, 155, 1, 1, '#14111c');
-	// Conduit down into the floor.
-	for (const x of [20, 46, 70]) px(g, x, 186, 2, 3, '#121018');
-}
-
-/** Right: a generator with a flywheel (it turns with the beat), and the fire exit. */
-function generatorAndExit(g: Ctx) {
-	// Plinth and the drum of the generator, banded and riveted.
-	px(g, 380, 180, 64, 7, '#15121c');
-	px(g, 380, 180, 64, 1, '#2a2638');
-	const shade = ['#3e504a', '#2e3c38', '#26322e', '#26322e', '#1f2a28', '#18201e', '#121816'];
-	for (let y = 160; y < 180; y++)
-		px(g, 384, y, 36, 1, shade[Math.floor(((y - 160) / 20) * shade.length)]);
-	for (let x = 389; x < 420; x += 7) {
-		px(g, x, 160, 1, 20, '#141c1a');
-		px(g, x + 1, 161, 1, 1, '#5a6a64');
-		px(g, x + 1, 178, 1, 1, '#5a6a64');
-	}
-	px(g, 383, 159, 2, 22, '#121816');
-	px(g, 394, 166, 21, 7, '#a8903a');
-	text(g, 'GEN 3', 395, 167, '#1a1408');
-	// Shaft out to the flywheel.
-	px(g, 420, FLYWHEEL[1] - 1, 11, 3, '#4a4a5a');
-	px(g, 420, FLYWHEEL[1] - 1, 11, 1, '#7a7a8a');
-	// Steam pipe up into the balcony slab, with a red valve wheel and a pressure gauge.
-	px(g, 388, 148, 3, 12, '#2e2a3a');
-	px(g, 388, 148, 1, 12, '#4a4460');
-	disc(g, 389, 152, 2, '#8a1e24');
-	px(g, 389, 152, 1, 1, '#14111c');
-	px(g, PRESSURE[0], PRESSURE[1] + 3, 1, 2, '#4a4460');
-	disc(g, PRESSURE[0], PRESSURE[1], 3, '#0c1210');
-	disc(g, PRESSURE[0], PRESSURE[1], 2, '#bdb59a');
-	px(g, BEACON[0] - 1, BEACON[1] + 1, 3, 2, '#1a1a22');
-
-	// Fire exit: a riveted steel door, a push bar and the green running man.
-	const dx = 452;
-	px(g, dx - 2, 156, 26, 31, '#0c0a12');
-	px(g, dx, 158, 22, 29, '#1e1a2a');
-	px(g, dx, 158, 22, 1, '#3a3448');
-	px(g, dx, 158, 1, 29, '#2e2a3c');
-	for (const y of [160, 184]) for (const x of [dx + 2, dx + 19]) px(g, x, y, 1, 1, '#4a4460');
-	px(g, dx + 7, 161, 8, 6, '#06040a');
-	px(g, dx + 7, 161, 8, 1, '#141222');
-	px(g, dx + 2, 172, 18, 2, '#5a5470');
-	px(g, dx + 2, 174, 18, 1, '#0c0a12');
-	px(g, dx + 3, 149, 16, 6, '#0d6a34');
-	px(g, dx + 3, 149, 16, 1, '#2aff7a');
-	const man = ['..#..', '.###.', '#.#.#', '.#.#.', '#...#'];
-	man.forEach((row, y) =>
-		[...row].forEach((ch, x) => ch === '#' && px(g, dx + 5 + x, 150 + y, 1, 1, '#eafff0'))
-	);
-	px(g, dx + 12, 152, 5, 1, '#eafff0');
-	px(g, dx + 15, 151, 1, 3, '#eafff0');
-	g.globalCompositeOperation = 'lighter';
-	glow(g, dx + 11, 152, 14, '#2aff7a', 0.18);
-	g.globalCompositeOperation = 'source-over';
 }
 
 function buildBanner(lines: string[], emblem: 'smile' | 'crown') {
@@ -826,8 +644,7 @@ export class ClubScene {
 					if (p.hand < hype * 0.7) px(g, p.x + (si ? -1 : 2), y - 3, 1, 4, '#07040e');
 				}
 				const [x0, x1] = si ? [376, 480] : [0, 104];
-				px(g, x0, ty - 5, x1 - x0, 1, '#3a3152');
-				for (let x = x0 + 2; x < x1; x += 5) px(g, x, ty - 5, 1, 5, '#2a2340');
+				this.town.room.railing(g, x0, x1, ty);
 				const col = si ? BLUE : PINK;
 				const al = i.live ? 0.25 + 0.75 * E.hats : 0.12;
 				px(g, x0, ty + 4, x1 - x0, 1, rgba(col, al));
@@ -1165,49 +982,9 @@ export class ClubScene {
 		}
 	}
 
-	/** The power station's machines run on the music: gauges, lamps, a flywheel turning with the beat. */
+	/** Whatever stands under the balconies runs on the music. */
 	private machines({ i, E, beat }: Frame) {
-		const g = this.g;
-		const sm = this.sm;
-		const levels = [sm.kick * 0.5 + E.kick * 0.5, E.bass, sm.hats * 0.5 + E.hats * 0.5, E.synth];
-		GAUGES.forEach(([x, y], n) => {
-			const v = i.live ? clamp(levels[n], 0, 1) : 0;
-			const a = Math.PI * (0.85 + 1.3 * v);
-			line(g, x, y, x + Math.cos(a) * 4.5, y + Math.sin(a) * 4.5, 1, '#d8d2e6');
-			px(g, x, y, 1, 1, '#8a2a3a');
-		});
-		const step = Math.floor(beat * 2);
-		PANEL_LAMPS.forEach((x, k) => {
-			const v = i.live ? E[LAYERS[k % LAYERS.length]] : 0;
-			const lit = v > 0.35 || (i.live && (k + step) % 10 === 0);
-			const col = ['#3aa870', '#b88030', '#b83a3a'][k % 3];
-			px(g, x, 180, 2, 2, lit ? col : '#1c1824');
-		});
-
-		// Flywheel: rim, six spokes and a red balance weight, a quarter turn per beat.
-		const [fx, fy] = FLYWHEEL;
-		const rot = i.live ? (beat * Math.PI) / 2 : 0;
-		for (let k = 0; k < 6; k++) {
-			const a = rot + (k / 6) * Math.PI * 2;
-			line(g, fx, fy, fx + Math.cos(a) * 10, fy + Math.sin(a) * 10, 1, '#3a4440');
-		}
-		for (let k = 0; k < 96; k++) {
-			const a = (k / 96) * Math.PI * 2;
-			const lit = Math.cos(a + Math.PI * 0.75) > 0.4;
-			px(g, fx + Math.cos(a) * 12, fy + Math.sin(a) * 12, 1, 1, lit ? '#6a7a74' : '#2e3836');
-			px(g, fx + Math.cos(a) * 11, fy + Math.sin(a) * 11, 1, 1, '#3e4a46');
-		}
-		px(g, fx + Math.cos(rot) * 11, fy + Math.sin(rot) * 11, 2, 2, '#b0242a');
-		disc(g, fx, fy, 2, '#5a6460');
-		px(g, fx, fy, 1, 1, '#9aa49e');
-
-		const [gx, gy] = PRESSURE;
-		const p = Math.PI * (0.85 + 1.3 * (i.live ? clamp(0.3 + 0.6 * sm.bass, 0, 1) : 0));
-		line(g, gx, gy, gx + Math.cos(p) * 1.8, gy + Math.sin(p) * 1.8, 1, '#1a1410');
-		const flash = i.live && E.kick > 0.5;
-		px(g, BEACON[0], BEACON[1], 1, 1, flash ? '#ffb03b' : '#5a3a14');
-		if (flash)
-			this.additive(() => glow(g, BEACON[0] + 0.5, BEACON[1] + 0.5, 6, '#ffb03b', 0.5 * E.kick));
+		this.town.room.live(this.g, { live: i.live, beat, cycle: i.cycle, t: this.t, E, sm: this.sm });
 	}
 
 	/** CO2 jets: a white plume shoots up on the drop's first two bars and the last bar of the build. */

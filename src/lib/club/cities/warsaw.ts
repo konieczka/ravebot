@@ -16,6 +16,7 @@ import {
 	twinkle,
 	type City
 } from './view.js';
+import { DISTILLERY } from './warsaw-room.js';
 
 /**
  * Warsaw: the Palace of Culture and Science on the left, floodlit in colours that change every
@@ -133,7 +134,9 @@ function paint(g: Ctx) {
 function live(g: Ctx, t: number, cycle: number, on: boolean) {
 	twinkle(g, STARS, t);
 	// The palace is floodlit in a new colour every four bars, the light pulsing on the beat.
-	const col = FLOOD[Math.floor(cycle / 4) % FLOOD.length];
+	// The clock can run below zero before the set settles, so wrap the index both ways.
+	const n = FLOOD.length;
+	const col = FLOOD[((Math.floor(cycle / 4) % n) + n) % n];
 	const pulse = on ? 0.12 + 0.1 * Math.exp(-((cycle * 4) % 1) * 5) : 0.1;
 	let below = DECK;
 	g.fillStyle = rgba(col, pulse);
@@ -182,7 +185,7 @@ export const WARSAW: City = {
 		['NOC', 'JEST', 'NASZA'],
 		['WAWA', 'NIGDY', 'NIE', 'ŚPI']
 	],
-	plant: 'ELEKTROWNIA',
+	room: DISTILLERY,
 	sticker,
 	paint,
 	live
