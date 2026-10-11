@@ -1,10 +1,15 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import Club from '#lib/components/Club.svelte';
 	import Controls from '#lib/components/Controls.svelte';
 	import Queue from '#lib/components/Queue.svelte';
 	import { isStage, type StageId } from '#lib/club/cities/index.js';
 	import { DjBrain } from '#lib/dj/brain.svelte.js';
 	import { GENRE_COLORS } from '#lib/dj/genres.js';
+
+	const TITLE = 'RaveBot — the AI DJ that never sleeps';
+	const DESCRIPTION =
+		'A pixel robot DJ in a club in Berlin, Warsaw or Paris that live-codes techno in Strudel with an LLM and mixes it seamlessly.';
 
 	const dj = new DjBrain();
 
@@ -32,11 +37,21 @@
 </script>
 
 <svelte:head>
-	<title>RaveBot — the AI DJ that never sleeps</title>
-	<meta
-		name="description"
-		content="A pixel robot DJ in a club in Berlin, Warsaw or Paris that live-codes techno in Strudel with an LLM and mixes it seamlessly."
-	/>
+	<title>{TITLE}</title>
+	<meta name="description" content={DESCRIPTION} />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="RaveBot" />
+	<meta property="og:title" content={TITLE} />
+	<meta property="og:description" content={DESCRIPTION} />
+	<meta property="og:url" content={page.url.origin} />
+	<meta property="og:image" content="{page.url.origin}/og.png" />
+	<meta property="og:image:width" content="1200" />
+	<meta property="og:image:height" content="630" />
+	<meta property="og:image:alt" content="RaveBot, a pixel-art robot DJ, at the decks above a dancing crowd" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={TITLE} />
+	<meta name="twitter:description" content={DESCRIPTION} />
+	<meta name="twitter:image" content="{page.url.origin}/og.png" />
 </svelte:head>
 
 <main style:--accent={GENRE_COLORS[dj.genre]}>
