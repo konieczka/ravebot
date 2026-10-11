@@ -33,7 +33,7 @@ export function hardbassVoice(
 		// Retain dynamics, but discard sample tuning, FX and envelopes. The pattern owns timing.
 		// Restore punch lost when replacing the hot sampled kicks with a clean oscillator.
 		// Lift body and strike together, retaining the pattern's relative accents and silence.
-		const dynamics = { gain: gain * 2 * 10 ** (6 / 20), velocity: value.velocity ?? 1 };
+		const dynamics = { gain: gain * 2 * 10 ** (8 / 20), velocity: value.velocity ?? 1 };
 		if (layer === 'strike')
 			return {
 				...dynamics,

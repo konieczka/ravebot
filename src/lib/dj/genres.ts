@@ -564,8 +564,8 @@ export const GENRES: Genre[] = [
 			bassDrive: 0.15,
 			synthDuck: 0.6,
 			space: 8000,
-			bass: 8,
-			synth: 27,
+			bass: 10,
+			synth: 29,
 			// Natural-pitch shouts retain their dynamics; leave master headroom.
 			vox: 0,
 			bochka: 0.6 * 10 ** (1 / 20),

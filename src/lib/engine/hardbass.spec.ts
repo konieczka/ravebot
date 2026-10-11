@@ -47,7 +47,7 @@ describe('hardbass playback voices', () => {
 		};
 		const hit = hardbassVoice('kick', input);
 		expect(hit).toMatchObject({ s: 'sine', velocity: 0.4, sustain: 0 });
-		expect(hit.gain).toBeCloseTo(2.39431);
+		expect(hit.gain).toBeCloseTo(3.01426);
 		expect(hit).not.toHaveProperty('bank');
 		expect(hit).not.toHaveProperty('speed');
 		expect(hit).not.toHaveProperty('room');
@@ -58,7 +58,7 @@ describe('hardbass playback voices', () => {
 	it('excites metal with a brief burst, without a second pitched kick', () => {
 		const hit = hardbassVoice('strike', { gain: 0.6, velocity: 0 });
 		expect(hit).toMatchObject({ s: 'white', velocity: 0, sustain: 0 });
-		expect(hit.gain).toBeCloseTo(2.39431);
+		expect(hit.gain).toBeCloseTo(3.01426);
 		expect(hit).not.toHaveProperty('note');
 		expect(Number(hit.attack) + Number(hit.decay)).toBeLessThan(0.006);
 	});
