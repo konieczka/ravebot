@@ -1,7 +1,14 @@
+import { parseHarmony, PHRASE_BARS, TONAL_LAYERS, transitionStart } from './harmony.js';
 import { browser } from '$app/env';
 import * as engine from '#lib/engine/strudel.js';
 import { clearWorkerInterval, setWorkerInterval } from '#lib/engine/timer.js';
-import { MIXER_GLOBAL, Mixer, buildProgram, type Deck } from '#lib/engine/mixer.js';
+import {
+	MIXER_GLOBAL,
+	Mixer,
+	buildProgram,
+	harmonicTransition,
+	type Deck
+} from '#lib/engine/mixer.js';
 import { TRACK_BARS, TRANSITION_BARS } from './arrangement.js';
 import { fallbackTrack } from './fallback.js';
 import { genreById } from './genres.js';
@@ -140,6 +147,20 @@ export class DjBrain {
 	}
 
 	toggleLock(layer: LayerName) {
+		if (this.liveTrack?.genre === 'french' && (TONAL_LAYERS as readonly string[]).includes(layer)) {
+			const on = !this.locked[layer];
+			for (const tonal of TONAL_LAYERS) {
+				this.locked[tonal] = on;
+				if (on) this.mixer.pinned.add(tonal);
+				else this.mixer.pinned.delete(tonal);
+			}
+			this.say(
+				on
+					? 'Holding bass, keys and voice together to preserve the harmony.'
+					: 'Released the harmonic loop.'
+			);
+			return;
+		}
 		this.locked[layer] = !this.locked[layer];
 		if (this.locked[layer]) this.mixer.pinned.add(layer);
 		else this.mixer.pinned.delete(layer);
@@ -176,14 +197,20 @@ export class DjBrain {
 			comment: 'Warming up the decks. Hello, humans.',
 			genre: this.genre,
 			layers: { ...seed.layers },
+			harmony: seed.harmony,
 			source: 'fallback'
 		};
 		this.mixer.live = this.live = 0;
+		this.mixer.bpm = this.bpm;
 		// Seeds are known-good; the dry run here just preloads the opener's samples.
 		await engine.dryRun(opener.layers).catch(() => {});
 		this.mixer.plan = null;
 		this.mixer.timelines = [this.timeline(opener, 0), null];
 		this.decks = [opener, null];
+		engine.setMix([this.mixer.mix(0), this.mixer.mix(1)], this.mixer.masterMix(0), [
+			this.mixer.musicCutoff(0, 0),
+			18000
+		]);
 		try {
 			await engine.play(buildProgram(this.decks, this.mixer));
 		} catch (e) {
@@ -227,7 +254,11 @@ export class DjBrain {
 		if (this.status !== 'live') return;
 		const c = engine.now();
 		// Bus processing follows each deck's genre; the master blends between them in a transition.
-		engine.setMix([this.mixer.mix(0), this.mixer.mix(1)], this.mixer.masterMix(c));
+		this.mixer.bpm = this.bpm;
+		engine.setMix([this.mixer.mix(0), this.mixer.mix(1)], this.mixer.masterMix(c), [
+			this.mixer.musicCutoff(0, c),
+			this.mixer.musicCutoff(1, c)
+		]);
 		if (this.busy) return;
 
 		if (Math.abs(this.targetBpm - this.bpm) > 0.01) {
@@ -273,16 +304,31 @@ export class DjBrain {
 		const to: Deck = from === 0 ? 1 : 0;
 		const current = this.decks[from]!;
 		const locked = LAYERS.filter((l) => this.locked[l]);
+		const french = current.genre === 'french' || incoming.genre === 'french';
+		if (french && TONAL_LAYERS.some((l) => locked.includes(l))) {
+			for (const l of TONAL_LAYERS) if (!locked.includes(l)) locked.push(l);
+			incoming.harmony = current.harmony;
+		}
 		for (const l of locked) incoming.layers[l] = current.layers[l];
 
 		const bars = skip ? SKIP_TRANSITION_BARS : TRANSITION_BARS;
 		// Start on the next 4-bar phrase (next bar when skipping), with a little headroom for evaluation.
-		const grid = skip ? 1 : 4;
-		const start = Math.ceil((c + 0.5) / grid) * grid;
+		const grid = french ? PHRASE_BARS : skip ? 1 : 4;
+		const origin = this.mixer.timelines[from]!.origin;
+		const start = transitionStart(c, origin, grid);
 
 		const decks: [Track | null, Track | null] = [...this.decks];
 		decks[to] = incoming;
-		this.mixer.plan = { from, to, start, bars, locked };
+		this.mixer.plan = {
+			from,
+			to,
+			start,
+			bars,
+			locked,
+			harmony: french
+				? harmonicTransition(current.harmony, incoming.harmony, origin, start + bars / 2)
+				: undefined
+		};
 		// The incoming track's bar 0 is the middle of the blend, where its kick and bass come in.
 		this.mixer.timelines[to] = this.timeline(incoming, start + bars / 2);
 		try {
@@ -328,7 +374,14 @@ export class DjBrain {
 			bpm: this.targetBpm,
 			energy: this.energy,
 			weirdness: this.weirdness,
-			previous: current ? { title: current.title, layers: current.layers } : undefined
+			previous: current
+				? {
+						title: current.title,
+						layers: current.layers,
+						harmony: current.harmony,
+						genre: current.genre
+					}
+				: undefined
 		};
 
 		// Combo alternates off the track this one follows: after an AI track dig the crate, otherwise
@@ -345,13 +398,13 @@ export class DjBrain {
 		};
 		let track: Track;
 		if (source === 'local') {
-			track = fallbackTrack(genre, current?.layers);
+			track = fallbackTrack(genre, current?.layers, current?.harmony);
 		} else {
 			try {
 				track = await this.requestTrack(req);
 			} catch (e) {
 				this.say(`Generation failed (${(e as Error).message}), using the backup crate.`);
-				track = fallbackTrack(genre, current?.layers);
+				track = fallbackTrack(genre, current?.layers, current?.harmony);
 				track.flags = ['AI FAILED'];
 			}
 		}
@@ -361,13 +414,26 @@ export class DjBrain {
 		}
 
 		const problems: Partial<Record<LayerName, string>> = await engine
-			.dryRun(track.layers)
+			.dryRun(track.layers, track.harmony)
 			.catch((e) => ({ kick: (e as Error).message }));
 		const broken = Object.keys(problems) as LayerName[];
+		if (genre === 'french' && !track.harmony) {
+			for (const layer of TONAL_LAYERS) if (!broken.includes(layer)) broken.push(layer);
+		}
 		if (broken.length) {
-			this.glitch(`Dry run failed: ${broken.map((l) => `${l} (${problems[l]})`).join(', ')}`);
-			if (broken.includes('kick')) {
-				track = fallbackTrack(genre, current?.layers);
+			this.glitch(
+				`Dry run failed: ${broken.map((l) => `${l} (${problems[l] ?? 'missing harmony'})`).join(', ')}`
+			);
+			if (genre === 'french') {
+				// Never repair one pitched layer from a different progression.
+				const backup = fallbackTrack(genre, current?.layers, track.harmony);
+				const replace = new Set(broken);
+				if (TONAL_LAYERS.some((l) => replace.has(l))) for (const l of TONAL_LAYERS) replace.add(l);
+				for (const l of replace) track.layers[l] = backup.layers[l];
+				track.harmony = backup.harmony;
+				track.flags = [...(track.flags ?? []), 'HARMONY REPAIRED'];
+			} else if (broken.includes('kick')) {
+				track = fallbackTrack(genre, current?.layers, current?.harmony);
 				track.flags = ['KICK BROKE'];
 			} else {
 				for (const l of broken) track.layers[l] = current?.layers[l] ?? 'silence';
@@ -392,7 +458,7 @@ export class DjBrain {
 			if (data.offline) {
 				if (!this.offline) this.say('No AI Gateway configured. Remixing the crate offline.');
 				this.offline = true;
-				return fallbackTrack(req.genre, req.previous?.layers);
+				return fallbackTrack(req.genre, req.previous?.layers, req.previous?.harmony);
 			}
 			throw new Error(data.error);
 		}
@@ -405,6 +471,7 @@ export class DjBrain {
 		return {
 			...data.track,
 			layers: layers as Track['layers'],
+			harmony: req.genre === 'french' ? parseHarmony(data.track.harmony) : undefined,
 			id: crypto.randomUUID(),
 			genre: req.genre,
 			source: 'llm',

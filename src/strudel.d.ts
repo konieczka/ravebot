@@ -2,6 +2,7 @@
 declare module '@strudel/web' {
 	export interface Hap {
 		value: Record<string, unknown>;
+		whole: { begin: { valueOf(): number }; end: { valueOf(): number } } | null;
 		hasOnset(): boolean;
 	}
 	export interface Pattern {

@@ -33,6 +33,8 @@ export interface ArcStyle {
 	 * their notes, so they ride over the pump instead of wobbling on every kick.
 	 */
 	voxDuck?: number;
+	/** Keep a repeating hook audible; develop it through filtering and subtraction. */
+	loopArrangement?: boolean;
 	/** Breakdown level overrides, e.g. acid keeps its 303 line playing without the kick. */
 	breakdown?: Partial<Record<LayerName, number>>;
 	/** Build-up level overrides, e.g. French house keeps the whole groove under its filter sweep. */
@@ -127,6 +129,13 @@ const inGap = (tl: Timeline, pos: Position) =>
 export function layerLevel(tl: Timeline, pos: Position, layer: LayerName, pinned = false): number {
 	if (inGap(tl, pos)) return 0;
 	if (pinned) return 1;
+	if (tl.style.loopArrangement) {
+		if (pos.kind === 'groove' && layer === 'synth') return 1;
+		if (pos.kind === 'intro' && layer === 'synth') return 1;
+		// Eight-bar vocal rests let the instrumental hook answer without replacing it.
+		if ((pos.kind === 'main' || pos.kind === 'peak') && layer === 'vox')
+			return Math.floor(((pos.kind === 'main' ? 24 : 32) - pos.left) / 8) % 2 === 0 ? 1 : 0;
+	}
 	if (pos.kind === 'breakdown') return tl.style.breakdown?.[layer] ?? LEVELS.breakdown[layer];
 	if (pos.kind === 'build') return tl.style.build?.[layer] ?? LEVELS.build[layer];
 	return LEVELS[pos.kind][layer];

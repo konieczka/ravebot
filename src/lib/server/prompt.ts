@@ -1,3 +1,4 @@
+import { chooseHarmony, FRENCH_HARMONIES } from '#lib/dj/harmony.js';
 import { genreById } from '#lib/dj/genres.js';
 import { LAYERS, type GenerateRequest } from '#lib/dj/types.js';
 import { RUS_VOICE } from '#lib/dj/voices.js';
@@ -41,7 +42,7 @@ Sound sources:
 
 Effects (chain as methods, numbers or patterns):
   .gain(.8) .lpf(800) .lpq(12) .hpf(300) .shape(.4) .distort(.5) .crush(6) .pan(.3)
-  .decay(.1).sustain(0) (short plucks)  .attack(.05) .release(.3)
+  .decay(.1).sustain(0) (short plucks)  .attack(.05) .release(.3) .legato(.9) (note length relative to its step)
   .room(.4) .delay(.5) .delayfeedback(.5) .speed(2)
 Modulation signals: sine saw tri perlin rand -> .range(lo,hi).slow(8), e.g. .lpf(sine.range(300,2000).slow(8))
   arc: the track's intensity, 0..1. Climbs through the track, dips in the breakdown, peaks after the drop.
@@ -154,9 +155,13 @@ export const TRACK_SCHEMA = {
 
 export function buildMessages(req: GenerateRequest) {
 	const genre = genreById(req.genre);
-	const example = genre.seeds[Math.floor(Math.random() * genre.seeds.length)];
-	const key = pick(KEYS, 1)[0];
-	const mode = pick(genre.modes ?? ['minor'], 1)[0];
+	const harmonyId =
+		req.genre === 'french' ? (req.harmony ?? chooseHarmony(req.previous?.harmony)) : undefined;
+	const examples = harmonyId ? genre.seeds.filter((s) => s.harmony === harmonyId) : genre.seeds;
+	const example = examples[Math.floor(Math.random() * examples.length)];
+	const harmony = harmonyId ? FRENCH_HARMONIES[harmonyId] : undefined;
+	const key = harmony?.key ?? pick(KEYS, 1)[0];
+	const mode = harmony?.mode ?? pick(genre.modes ?? ['minor'], 1)[0];
 	const style = pickStyle(genre.styles, req.weirdness);
 
 	const system = [
@@ -177,8 +182,16 @@ export function buildMessages(req: GenerateRequest) {
 	lines.push(
 		`Key: ${key} ${mode} (bass in octave 1-2, synth in octave 3-5).`,
 		`Style for this track: ${style.name}: ${style.recipe}. Use it as the starting idea, in the key above, with your own patterns.`,
-		`Extra idea: ${pick(TWISTS, 1)[0]}.`
+		`Extra idea: ${req.genre === 'french' ? 'Repeat a memorable four-bar loop; alternate held chords with syncopated attacks and leave space for the bass' : pick(TWISTS, 1)[0]}.`
 	);
+	if (harmony) {
+		lines.push(
+			`HARMONIC CONTRACT: repeat these four bars exactly in this order. Bass roots: ${harmony.roots.join(' | ')}. Keyboard voicings: ${harmony.chords.map((c) => '[' + c.join(',') + ']').join(' | ')}.`,
+			"Bass, synth and pitched vox must use the current bar's chord tones or bass root, in any octave. Keep common tones and close inversions. No independent chord cycles or transposition transforms. Use commas for simultaneous chords.",
+			'Write an original rhythm and a singable answer using those pitches: 2-3 chord attacks per bar, mixed note lengths (@ weights), sustain .4-.65 and legato .9 for keys, short release .08-.15. Bass: 3-5 syncopated attacks per bar with occasional octaves, never continuous octave alternation. Vox: held notes and breathing space across 4-8 bars. No running arpeggios, ply, iter, random note changes, pitched sample stabs or long delay trails.',
+			'The engine provides shared filtering, saturation and pumping. Keep the core motif stable; vary articulation or one phrase-ending answer. Do not put a separate fast filter sweep on every layer.'
+		);
+	}
 	if (req.previous) {
 		lines.push(
 			`The previous track was "${req.previous.title}":\n${JSON.stringify(req.previous.layers)}`,

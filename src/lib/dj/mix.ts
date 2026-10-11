@@ -40,6 +40,12 @@ export interface MixProfile {
 	space: number;
 	/** Share of the genre's kick sidechain depth applied to the synth bus (the bass always gets all of it). */
 	synthDuck: number;
+	/** Shared bass/keys filter, saturation and compression; 0 bypasses the group. */
+	loopGlue: number;
+	/** Duck the bass above 120 Hz too (0..1 share of sub ducking). */
+	bassFullDuck: number;
+	/** Pump recovery in beats, or 0 for the legacy 160 ms recovery. */
+	duckBeats: number;
 	/** Level of the short metal impact exciter accompanying the Hardbass kick. */
 	bochka: number;
 	/** Mild waveshaping on the dedicated Hardbass kick body, independent of the drums bus. */
@@ -70,6 +76,9 @@ export const BASE_MIX: MixProfile = {
 	perc: 2,
 	space: 7000,
 	synthDuck: 0.5,
+	loopGlue: 0,
+	bassFullDuck: 0,
+	duckBeats: 0,
 	bochka: 0,
 	barrel: 0,
 	can: 0,
@@ -175,4 +184,11 @@ export function humanize(
 			out.cutoff = value.cutoff * 2 ** (0.12 * drift(seed + 3, t / 4));
 	}
 	return out;
+}
+
+/** Beat-relative recovery leaves room before the next kick; other genres retain their envelope. */
+export function duckRecovery(mix: MixProfile, bpm: number): number {
+	return mix.duckBeats > 0
+		? Math.max(0.06, Math.min(0.45, (mix.duckBeats * 60) / Math.max(40, bpm)))
+		: 0.16;
 }

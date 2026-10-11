@@ -1,3 +1,4 @@
+import { chooseHarmony, parseHarmony } from '#lib/dj/harmony.js';
 import { json } from '@sveltejs/kit';
 import {
 	CF_ACCOUNT_ID,
@@ -53,9 +54,12 @@ function parseRequest(body: any): GenerateRequest | null {
 		const { layers } = validateLayers(prev.layers);
 		req.previous = {
 			title: prev.title.slice(0, 60),
+			genre: GENRES.some((g) => g.id === prev.genre) ? prev.genre : undefined,
+			harmony: parseHarmony(prev.harmony),
 			layers: Object.fromEntries(LAYERS.map((l) => [l, layers[l] ?? 'silence'])) as Layers
 		};
 	}
+	if (req.genre === 'french') req.harmony = chooseHarmony(req.previous?.harmony);
 	return req;
 }
 
@@ -215,7 +219,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			track: {
 				title: String(parsed.title || 'Untitled Banger').slice(0, 60),
 				comment: String(parsed.comment || '').slice(0, 120),
-				layers: layers as Layers
+				layers: layers as Layers,
+				harmony: req.harmony
 			}
 		} satisfies GenerateResponse);
 	}

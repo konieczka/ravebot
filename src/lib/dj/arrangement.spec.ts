@@ -106,7 +106,12 @@ describe('levels', () => {
 		expect(djFilter(french, at(80))).toBe(0.5);
 		expect(layerLevel(french, at(76), 'kick')).toBe(1);
 		expect(layerLevel(french, at(76), 'vox')).toBe(0);
-		expect(layerLevel(french, at(79.8), 'kick')).toBe(0);
+		expect(layerLevel(french, at(79.8), 'kick')).toBe(1);
+		expect(layerLevel(french, at(60), 'bass')).toBe(1);
+		expect(layerLevel(french, at(0), 'synth')).toBe(1);
+		expect(layerLevel(french, at(36), 'vox')).toBe(1);
+		expect(layerLevel(french, at(44), 'vox')).toBe(0);
+		expect(layerLevel(french, at(52), 'vox')).toBe(1);
 	});
 });
 

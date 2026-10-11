@@ -1,3 +1,4 @@
+import { PHRASE_BARS, type HarmonyId } from '#lib/dj/harmony.js';
 import {
 	djFilter,
 	fxLevel,
@@ -9,7 +10,14 @@ import {
 	type Position,
 	type Timeline
 } from '#lib/dj/arrangement.js';
-import { BASE_MIX, blendMix, humanize, swingAmount, type MixProfile } from '#lib/dj/mix.js';
+import {
+	BASE_MIX,
+	blendMix,
+	duckRecovery,
+	humanize,
+	swingAmount,
+	type MixProfile
+} from '#lib/dj/mix.js';
 import { LAYERS, type LayerName, type Track } from '#lib/dj/types.js';
 
 import { hardbassVoice } from './hardbass.js';
@@ -24,6 +32,8 @@ export interface TransitionPlan {
 	bars: number;
 	/** Layers that are identical in both decks and simply keep playing on the outgoing deck. */
 	locked: LayerName[];
+	/** Unknown or incompatible harmony uses a percussion bridge. */
+	harmony?: 'overlap' | 'bridge';
 }
 
 const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
@@ -49,6 +59,7 @@ const CURVES: Record<LayerName, { in: (p: number) => number; out: (p: number) =>
 
 export class Mixer {
 	live: Deck = 0;
+	bpm = 128;
 	plan: TransitionPlan | null = null;
 	/** Arrangement timeline of each loaded deck. */
 	timelines: [Timeline | null, Timeline | null] = [null, null];
@@ -61,6 +72,16 @@ export class Mixer {
 		if (!plan) return deck === this.live ? 1 : 0;
 		const locked = plan.locked.includes(layer);
 		const p = clamp01((cycle - plan.start) / plan.bars);
+		if (plan.harmony === 'bridge' && !locked && (layer === 'synth' || layer === 'vox')) {
+			// Finish the outgoing harmony one bar before the bass handoff; let tails clear.
+			const edge = 0.5 - 1 / plan.bars;
+			return deck === plan.from ? 1 - ramp(p, 0.125, edge) : ramp(p, 0.5, 0.625);
+		}
+		if (plan.harmony === 'overlap' && layer === 'synth' && !locked) {
+			// Complementary curves avoid a level hump from two related chord loops.
+			const x = ramp(p, 0.25, 0.75);
+			return deck === plan.from ? 1 - x : x;
+		}
 		if (deck === plan.from) return locked ? 1 : CURVES[layer].out(p);
 		if (deck === plan.to) return locked ? 0 : CURVES[layer].in(p);
 		return 0;
@@ -94,7 +115,30 @@ export class Mixer {
 
 	djf(deck: Deck, cycle: number): number {
 		const pos = this.position(deck, cycle);
+		if (this.mix(deck).loopGlue > 0) return 0.5;
 		return pos ? djFilter(this.timelines[deck]!, pos) : 0.5;
+	}
+
+	/** A shared, smoothly automated filter on the bass/keyboard sum, leaving drums crisp. */
+	musicCutoff(deck: Deck, cycle: number): number {
+		const pos = this.position(deck, cycle);
+		if (!pos || this.mix(deck).loopGlue === 0) return 18000;
+		const ranges: Record<Position['kind'], [number, number]> = {
+			intro: [1800, 1800],
+			groove: [1800, 4200],
+			lift: [4200, 7200],
+			main: [7200, 6000],
+			breakdown: [6000, 650],
+			build: [650, 8500],
+			peak: [8500, 7200],
+			outro: [7200, 1800]
+		};
+		const [a, b] = ranges[pos.kind];
+		return a * (b / a) ** pos.x;
+	}
+
+	duckRelease(deck: Deck): number {
+		return duckRecovery(this.mix(deck), this.bpm);
 	}
 
 	/** Mix profile of a deck's track. */
@@ -107,10 +151,10 @@ export class Mixer {
 	 * level, so nothing pumps while the kick is out. The synth bus gets a share of the bass depth so
 	 * leads are not pushed down as hard as the bass; the rumble always breathes with the kick.
 	 */
-	duck(deck: Deck, cycle: number): [number, number, number, number] {
+	duck(deck: Deck, cycle: number, kickDeck: Deck = deck): [number, number, number, number] {
 		const tl = this.timelines[deck];
 		if (!tl) return [0, 0, 0, 0];
-		const kick = this.gain(deck, 'kick', cycle);
+		const kick = this.gain(kickDeck, 'kick', cycle);
 		const { duck, voxDuck } = tl.style;
 		const mix = this.mix(deck);
 		return [duck * kick, duck * mix.synthDuck * kick, (voxDuck ?? duck) * kick, 0.9 * kick];
@@ -174,8 +218,7 @@ export const MIXER_GLOBAL = '__ravebot';
 const M = MIXER_GLOBAL;
 /**
  * Each deck mixes into its own buses (Strudel orbits), and the engine processes every bus
- * separately (see master.ts): drums get glue, the bass keeps a mono sub that alone is ducked by the
- * kick, the synth bus is high-passed with presence and saturation, vox sits on its own, and the
+ * separately (see master.ts): drums get glue, the bass keeps a mono sub (French house also ducks its upper band), the synth bus is high-passed with presence and saturation, vox sits on its own, and the
  * rumble send is distorted and low-passed.
  */
 export const BUSES = ['drums', 'bass', 'synth', 'vox', 'rumble', 'bochka'] as const;
@@ -221,10 +264,11 @@ export function buildProgram(decks: [Track | null, Track | null], mixer: Mixer):
 			const expr = track.layers[layer];
 			if (!expr || expr === 'silence') continue;
 			// Array values duck several orbits, each with its own depth.
+			const pumpDecks = mixer.plan?.harmony ? [deck, 1 - deck] : [deck];
 			const duck =
-				layer === 'kick' && ducks
-					? `.duckorbit(signal(() => [${(['bass', 'synth', 'vox', 'rumble'] as const).map(orbit).join(', ')}])).duckattack(.16)` +
-						`.duckdepth(signal(t => ${M}.duck(${deck}, t)))`
+				layer === 'kick' && (ducks || mixer.plan?.harmony)
+					? `.duckorbit(signal(() => [${pumpDecks.flatMap((d) => (['bass', 'synth', 'vox', 'rumble'] as const).map((bus) => busOrbit(bus, d))).join(', ')}])).duckattack(signal(() => ${M}.duckRelease(${deck})))` +
+						`.duckdepth(signal(t => [${pumpDecks.map((d) => `...${M}.duck(${d}, t, ${deck})`).join(', ')}]))`
 					: '';
 			// Swing unless the layer already swings itself.
 			const swing =
@@ -279,4 +323,15 @@ export function buildProgram(decks: [Track | null, Track | null], mixer: Mixer):
 		);
 	});
 	return parts.length ? `stack(\n${parts.join(',\n')}\n)` : 'silence';
+}
+
+/** Matching keys alone are insufficient: chord grids and their phase must agree. */
+export function harmonicTransition(
+	from?: HarmonyId,
+	to?: HarmonyId,
+	fromOrigin = 0,
+	toOrigin = 0
+): 'overlap' | 'bridge' {
+	const phase = (((toOrigin - fromOrigin) % PHRASE_BARS) + PHRASE_BARS) % PHRASE_BARS;
+	return from && from === to && phase < 1e-6 ? 'overlap' : 'bridge';
 }

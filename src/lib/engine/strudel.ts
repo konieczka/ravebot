@@ -1,3 +1,4 @@
+import { fitsHarmony, type HarmonyId } from '#lib/dj/harmony.js';
 import type { Pattern, StrudelRepl } from '@strudel/web';
 import { LAYERS, type Layers } from '#lib/dj/types.js';
 import { RUS_BASE, RUS_FILES } from '#lib/dj/voices.js';
@@ -97,10 +98,16 @@ export async function play(code: string): Promise<void> {
 }
 
 /** Sets each deck's bus processing and the master bus from the genres' mix profiles. */
-export function setMix(decks: [MixProfile, MixProfile], master: MixProfile): void {
+export function setMix(
+	decks: [MixProfile, MixProfile],
+	master: MixProfile,
+	cutoffs: [number, number] = [18000, 18000]
+): void {
 	desk?.setDeckMix(0, decks[0]);
 	desk?.setDeckMix(1, decks[1]);
 	desk?.setMasterMix(master);
+	desk?.setMusicCutoff(0, cutoffs[0]);
+	desk?.setMusicCutoff(1, cutoffs[1]);
 }
 
 export function stop(): void {
@@ -134,7 +141,10 @@ async function compile(code: string): Promise<Pattern> {
  * Also preloads the track's samples. Returns a map of layer -> problem; empty when the track
  * is safe to mix in.
  */
-export async function dryRun(layers: Layers): Promise<Partial<Record<keyof Layers, string>>> {
+export async function dryRun(
+	layers: Layers,
+	harmony?: HarmonyId
+): Promise<Partial<Record<keyof Layers, string>>> {
 	if (!web) throw new Error('engine not initialised');
 	const problems: Partial<Record<keyof Layers, string>> = {};
 	const loads = new Map<string, Promise<unknown> | null>();
@@ -148,7 +158,23 @@ export async function dryRun(layers: Layers): Promise<Partial<Record<keyof Layer
 				problems[layer] = 'pattern produced no events';
 				continue;
 			}
-			for (const { value } of haps) {
+			for (const hap of haps) {
+				const { value } = hap;
+				if (harmony && !fitsHarmony(harmony, layer, value, hap.whole!.begin.valueOf()))
+					throw new Error('notes do not follow the shared harmonic plan');
+				if (harmony && ['bass', 'synth', 'vox'].includes(layer)) {
+					if (Number(value.release ?? 0) > 0.3 || Number(value.delay ?? 0) > 0.3)
+						throw new Error('tonal tails are too long for the harmonic handoff');
+					// Held tones must remain compatible across each crossed chord boundary.
+					for (
+						let bar = Math.floor(hap.whole!.begin.valueOf()) + 1;
+						bar < hap.whole!.end.valueOf();
+						bar++
+					)
+						if (!fitsHarmony(harmony, layer, value, bar))
+							throw new Error('held note crosses an incompatible chord');
+				}
+
 				const s =
 					typeof value.s === 'string'
 						? value.s

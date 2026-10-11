@@ -60,3 +60,18 @@ describe('pickStyle', () => {
 		}
 	});
 });
+
+it('gives French house one shared harmonic grid and omits random arpeggio twists', () => {
+	const [, user] = buildMessages({
+		genre: 'french',
+		bpm: 124,
+		energy: 6,
+		weirdness: 3,
+		harmony: 'sunrise-d'
+	});
+	expect(user.content).toContain('Key: D major');
+	expect(user.content).toContain('HARMONIC CONTRACT');
+	expect(user.content).toContain('d2 | b1 | g1 | a1');
+	expect(user.content).toContain('No running arpeggios');
+	expect(user.content).not.toContain('Extra idea: synth: a 16th-note arpeggio');
+});

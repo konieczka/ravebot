@@ -384,37 +384,37 @@ export const GENRES: Genre[] = [
 		name: 'French House',
 		bpm: 124,
 		brief:
-			"French touch, 1996-2003 (Daft Punk, Stardust, Modjo, Cassius, Alan Braxe, Roule): shiny, euphoric filter-disco house. A 909 kick on every beat that pumps the whole mix, claps on 2 and 4, open hats, shakers and rides. A funky octave-jumping disco bass (plucky square or sawtooth with lpenv). A looped riff of lush 7th/9th chords in a real disco progression (e.g. Fmaj7 -> Em7 -> Dm9 -> G7sus in '<...>') that sounds like a filtered disco sample: sawtooth or supersaw with .phaser() and a slowly moving low-pass (sine.range(...).slow(16)), often stacked with a guitar-like pulse pluck. The robot vocoder hook is the signature: a held sawtooth melody in octave 3-4 (.sustain(.7)) with a vowel per note, e.g. .vowel('<[o o a e] [a a o o]>'), bright (.lpf(4500)), slightly driven (.shape(.15)), with .vib for talkbox wobble. Hooks matter most: bright, catchy, feel-good.",
+			'French touch, Discovery-era warmth and filter disco. Build an original four-bar musical loop that feels played and resampled: closely voiced extended chords, syncopated attacks alternating with held notes, a rounded bass groove and a sparse singable response. Repetition is the hook; evolve the filter and arrangement, keep the melody recognizable. The bass, keys and voice share the supplied harmonic contract. Use warm electric piano, restrained saw chords or rounded pulse guitar colors. Avoid default arpeggios, continuous octave bass, tiny zero-sustain stabs and excessive detuned supersaws. A steady 909, claps on 2 and 4, lightly swung hats. The engine processes bass and keys together and supplies the pump; vowel-filtered synths are optional robotic color, not a required imitation of vocals.',
 		styles: [
 			{
 				name: 'Daft Punk "Discovery"',
 				recipe:
-					'a supersaw brass riff with lpenv and phaser over Fmaj7 -> Em7 -> Dm9 -> G7sus4 in a syncopated 16-step rhythm, an octave square disco bass, a 4-bar robot vocoder hook with a vowel per note and vibrato'
+					'warm sustained seventh/ninth keyboard voicings with two syncopated attacks per bar, a rounded syncopated bass and a held four-bar robotic answer'
 			},
 			{
 				name: 'Daft Punk "Homework"',
 				recipe:
-					'raw gritty 909 with bitcrushed hats; the bass is the lead: a squelchy ladder line with high resonance, lpenv and drive; off-beat coarse pulse stabs; a pulse-wave vocoder'
+					'raw 909 drums, a memorable restrained saw bass riff with space between notes, close pulse chord voicings and a sparse robot answer'
 			},
 			{
 				name: 'Stardust / Modjo',
 				recipe:
-					"a looped two-chord 9th 'sample' with phaser and a slow 16-bar low-pass, stacked with a guitar-like pulse pluck in dotted delay, a 16th octave disco bass, a breathy talkbox vocoder"
+					'a repeating ninth-chord keyboard phrase following the supplied four-bar grid, a few guitar-like pulse accents, syncopated bass with occasional octaves and a breathy robotic answer; shared filter handled by the engine'
 			},
 			{
 				name: 'Cassius / Bob Sinclar',
 				recipe:
-					'supersaw brass stabs under a 32-bar filter sweep, FM piano chops (.fm(1.5).fmh(1)) answering in the second half of each bar, a vocoder phrase plus a rave shot on bar 16'
+					'rounded brass chords with held notes, FM piano (.fm(1.5).fmh(1)) answering in the second half of the phrase, a sparse robotic voice; leave room for the shared filter'
 			},
 			{
 				name: 'Alan Braxe & Fred Falke',
 				recipe:
-					'a warm nostalgic keyboard loop of dense 9th voicings with .noise() breath, a 32-bar filter drift, soft 707 drums, a ladder bass, a dreamy slow-attack vocoder'
+					'a warm nostalgic electric-piano loop with close ninth voicings, soft 707 drums, a rounded syncopated bass and a dreamy slow-attack robotic answer'
 			},
 			{
 				name: 'Roule glitch (experimental)',
 				recipe:
-					"a chopped stuttering disco loop: .ply('<1 1 2 [1 4]>') stabs, .chunk(4, ...) octave jumps, a stepped-saw low-pass with fast phaser, an iter(4) bass, 5-step polymeter hats, a speakspell shot"
+					'a disco loop with one short repeated chord answer on bar four, steady harmony and bass, crunchy percussion and a sparse speakspell shot; keep the core phrase intact'
 			}
 		],
 		modes: ['major', 'dorian', 'minor'],
@@ -423,23 +423,27 @@ export const GENRES: Genre[] = [
 			roll: null,
 			riser: null,
 			impact: false,
-			gap: true,
-			duck: 0.7,
+			gap: false,
+			loopArrangement: true,
+			duck: 0.42,
 			// Held vocoder notes would wobble on every kick at the full pump.
-			voxDuck: 0.3,
+			voxDuck: 0.16,
 			sweep: 'lowpass',
-			breakdown: { hats: 0.4, perc: 0.6 },
+			breakdown: { kick: 1, bass: 1, synth: 1, vox: 0, hats: 0.25, perc: 0.45 },
 			build: { kick: 1, bass: 1, hats: 1, perc: 1, synth: 1, vox: 0 }
 		},
 		mix: mixProfile({
 			swing: 0.56,
 			glue: 0.6,
 			drive: 0.35,
-			drift: 4,
-			synthDuck: 1,
+			drift: 2,
+			synthDuck: 0.8,
+			loopGlue: 0.65,
+			bassFullDuck: 1,
+			duckBeats: 0.65,
 			space: 10000,
 			bass: 3,
-			synth: 16.5
+			synth: 13.5
 		}),
 		seeds: FRENCH
 	},

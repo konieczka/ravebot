@@ -8,7 +8,7 @@ import { BUSES, busOrbit, type BusName } from './mixer.js';
  *   orbit (Strudel) ─▶ bus insert (per deck and bus) ─▶ superdough output ─▶ master chain ─▶ out
  *
  * - drums: glue compression plus a parallel "smash" compressor
- * - bass: crossover at 120 Hz; the sub is mono and is the only part the kick ducks, the upper
+ * - bass: crossover at 120 Hz; the sub is mono; French house also ducks the upper band. The upper
  *   band is saturated so the bassline stays audible on small speakers
  * - synth: 24 dB high-pass at 150 Hz, low-mid cut, presence boost, saturation, level trim
  * - vox: high-pass and presence
@@ -131,6 +131,8 @@ interface Bus {
 	output: GainNode;
 	/** What the kick ducks: by default the orbit output, the bass ducks only its sub. */
 	duckParam?: AudioParam;
+	upperDuck?: AudioParam;
+	fullDuck?: number;
 	/** High-pass on this orbit's reverb and delay returns, or 0 to keep the lows (rumble). */
 	returnHp: number;
 	/** Low-passes on the returns, tracking the profile's `space`. */
@@ -186,17 +188,20 @@ function createBus(ac: AudioContext, name: BusName): Bus {
 		const sub = mono(ac);
 		const duck = new GainNode(ac);
 		const sat = saturator(ac, 2);
+		const upperDuck = new GainNode(ac);
 		const sum = new GainNode(ac);
 		input.connect(trim);
 		trim.connect(low.input);
 		low.output.connect(sub).connect(duck).connect(sum);
 		trim.connect(high.input);
-		high.output.connect(sat.node).connect(sum);
+		high.output.connect(sat.node).connect(upperDuck).connect(sum);
 		sum.connect(biquad(ac, 'highpass', 28)).connect(wet);
 		bus.duckParam = duck.gain;
+		bus.upperDuck = upperDuck.gain;
 		bus.update = (mix) => {
 			smooth(trim.gain, db(mix.bass), ac);
 			sat.set(1 + 8 * mix.bassDrive);
+			bus.fullDuck = mix.bassFullDuck;
 		};
 	} else if (name === 'synth') {
 		// Trim first, so drive and leveling do not depend on how loud the layer was written. The
@@ -381,6 +386,42 @@ function createMaster(ac: AudioContext, out: AudioNode): Master {
 	};
 }
 
+/** Shared processing makes separately played bass and keys behave like one sampled phrase.
+ * Drums and vocals retain their own transients. A zero amount is an actual dry bypass.
+ */
+function createMusicGroup(ac: AudioContext) {
+	const input = new GainNode(ac);
+	const output = new GainNode(ac);
+	const dry = new GainNode(ac);
+	const wet = new GainNode(ac, { gain: 0 });
+	const filter = biquad(ac, 'lowpass', 18000, 0.65);
+	const glue = new DynamicsCompressorNode(ac, {
+		threshold: -15,
+		knee: 9,
+		ratio: 2,
+		attack: 0.025,
+		release: 0.22
+	});
+	const sat = saturator(ac, 1.5);
+	input.connect(dry).connect(output);
+	series(input, filter, glue, sat.node, wet, output);
+	return {
+		input,
+		output,
+		set(amount: number, bypass: boolean) {
+			const active = amount > 0 && !bypass;
+			smooth(dry.gain, active ? 0 : 1, ac);
+			smooth(wet.gain, active ? 1 : 0, ac);
+			smooth(glue.threshold, -12 - 6 * amount, ac);
+			smooth(glue.ratio, 1 + 1.5 * amount, ac);
+			sat.set(1 + 1.5 * amount);
+		},
+		cutoff(hz: number) {
+			smooth(filter.frequency, Math.max(200, Math.min(18000, hz)), ac);
+		}
+	};
+}
+
 // ── loudness meter ─────────────────────────────────────────────────────────
 
 interface Tap {
@@ -500,6 +541,7 @@ export class MixDesk {
 	private buses = new Map<Orbit, Bus>();
 	private deckBuses: Bus[][] = [[], []];
 	private master: Master | null = null;
+	private musicGroups: ReturnType<typeof createMusicGroup>[] = [];
 	private destination: GainNode | null = null;
 	private bypassed = false;
 	private profiles: [MixProfile, MixProfile] = [BASE_MIX, BASE_MIX];
@@ -518,12 +560,16 @@ export class MixDesk {
 		const first = this.controller.getOrbit(busOrbit('drums', 0), [0, 1]);
 		this.patchOrbits(Object.getPrototypeOf(first));
 		[0, 1].forEach((deck) => {
+			const music = createMusicGroup(this.ac);
+			this.musicGroups[deck] = music;
+			this.controller.output.connectToDestination(music.output, [0, 1]);
 			for (const name of BUSES) {
 				const orbit = this.controller.getOrbit(busOrbit(name, deck), [0, 1]);
 				const bus = createBus(this.ac, name);
 				orbit.output.disconnect();
 				orbit.output.connect(bus.input);
-				this.controller.output.connectToDestination(bus.output, [0, 1]);
+				if (name === 'bass' || name === 'synth') bus.output.connect(music.input);
+				else this.controller.output.connectToDestination(bus.output, [0, 1]);
 				this.buses.set(orbit, bus);
 				this.deckBuses[deck].push(bus);
 			}
@@ -583,19 +629,25 @@ export class MixDesk {
 		};
 		proto.duck = function (this: Orbit, t: number, onset = 0, attack = 0.1, depth = 1) {
 			const bus = desk.buses.get(this);
-			const param = (!desk.bypassed && bus?.duckParam) || this.output.gain;
+			const params: [AudioParam, number][] = [
+				[(!desk.bypassed && bus?.duckParam) || this.output.gain, depth]
+			];
+			if (!desk.bypassed && bus?.upperDuck)
+				params.push([bus.upperDuck, depth * (bus.fullDuck ?? 0)]);
 			const ac = this.audioContext;
 			desk.timeout(
 				ac,
 				() => {
 					const now = ac.currentTime;
-					const current = param.value;
-					param.cancelScheduledValues(now);
-					param.setValueAtTime(current, now);
-					const t0 = Math.max(t, now);
-					const ducked = Math.min(Math.max(1 - Math.sqrt(depth), 0.01), current);
-					param.exponentialRampToValueAtTime(ducked, t0 + onset);
-					param.exponentialRampToValueAtTime(1, t0 + onset + Math.max(attack, 0.002));
+					for (const [param, amount] of params) {
+						const current = param.value;
+						param.cancelScheduledValues(now);
+						param.setValueAtTime(current, now);
+						const t0 = Math.max(t, now);
+						const ducked = Math.min(Math.max(1 - Math.sqrt(Math.max(0, amount)), 0.01), current);
+						param.exponentialRampToValueAtTime(ducked, t0 + onset);
+						param.exponentialRampToValueAtTime(1, t0 + onset + Math.max(attack, 0.002));
+					}
 				},
 				0,
 				t - 0.01
@@ -613,10 +665,15 @@ export class MixDesk {
 	setDeckMix(deck: 0 | 1, mix: MixProfile, force = false): void {
 		if (mix === this.profiles[deck] && !force) return;
 		this.profiles[deck] = mix;
+		this.musicGroups[deck]?.set(mix.loopGlue, this.bypassed);
 		for (const bus of this.deckBuses[deck]) {
 			bus.update(mix);
 			this.updateReturns(bus);
 		}
+	}
+
+	setMusicCutoff(deck: 0 | 1, hz: number): void {
+		this.musicGroups[deck]?.cutoff(hz);
 	}
 
 	setMasterMix(mix: MixProfile): void {
@@ -650,6 +707,11 @@ export class MixDesk {
 			bus.duckParam?.cancelScheduledValues(0);
 			bus.duckParam?.setValueAtTime(1, this.ac.currentTime);
 		}
+		for (const bus of this.buses.values()) {
+			bus.upperDuck?.cancelScheduledValues(0);
+			bus.upperDuck?.setValueAtTime(1, this.ac.currentTime);
+		}
+		this.musicGroups.forEach((group, deck) => group.set(this.profiles[deck].loopGlue, on));
 		if (this.master) set(this.master.wet, this.master.dry);
 	}
 
