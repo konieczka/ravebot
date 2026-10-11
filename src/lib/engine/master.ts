@@ -401,6 +401,26 @@ class Meter {
 
 // ── wiring ─────────────────────────────────────────────────────────────────
 
+let disconnectPatched = false;
+
+/**
+ * Superdough 1.3 tears down an oscillator's `noise` mix by disconnecting nodes it has already
+ * released, which throws and skips the rest of the voice's cleanup (nodes leak, the voice never
+ * ends). Disconnecting from a node that is not connected is harmless, so let exactly that pass.
+ */
+function tolerateStaleDisconnects(): void {
+	if (disconnectPatched) return;
+	disconnectPatched = true;
+	const disconnect = AudioNode.prototype.disconnect as (...args: unknown[]) => void;
+	AudioNode.prototype.disconnect = function (this: AudioNode, ...args: unknown[]) {
+		try {
+			disconnect.apply(this, args);
+		} catch (e) {
+			if ((e as DOMException).name !== 'InvalidAccessError') throw e;
+		}
+	} as AudioNode['disconnect'];
+}
+
 export class MixDesk {
 	private buses = new Map<Orbit, Bus>();
 	private deckBuses: Bus[][] = [[], []];
@@ -419,6 +439,7 @@ export class MixDesk {
 
 	/** Splices the desk into superdough. Call once after init, before any sound plays. */
 	install(): void {
+		tolerateStaleDisconnects();
 		const first = this.controller.getOrbit(busOrbit('drums', 0), [0, 1]);
 		this.patchOrbits(Object.getPrototypeOf(first));
 		[0, 1].forEach((deck) => {

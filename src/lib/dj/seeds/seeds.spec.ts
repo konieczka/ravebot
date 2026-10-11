@@ -6,8 +6,8 @@ import { LAYERS } from '../types';
 const seeds = GENRES.flatMap((g) => g.seeds);
 
 describe('local crate', () => {
-	it('has 9 tracks per genre', () => {
-		for (const genre of GENRES) expect(genre.seeds.length, genre.id).toBe(9);
+	it('has 15 tracks per genre', () => {
+		for (const genre of GENRES) expect(genre.seeds.length, genre.id).toBe(15);
 	});
 
 	it('has unique titles', () => {
