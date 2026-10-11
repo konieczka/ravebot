@@ -44,7 +44,8 @@ const METHODS = new Set(
 		'decay sustain attack release room size delay delaytime delayfeedback speed legato clip vowel phaser ' +
 		'fast slow rev ply degradeBy sometimesBy sometimes rarely often every firstOf lastOf off jux struct ' +
 		'mask range rangex segment add sub mul late early euclid swingBy chop iter palindrome hurry linger ' +
-		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo vib vibmod phaserdepth fmwave fmattack fmdecay fmsustain fmenv'
+		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo vib vibmod phaserdepth fmwave fmattack fmdecay fmsustain fmenv ' +
+		'drive unison detune spread pw noise roomlp roomdim roomsize roomfade'
 	).split(' ')
 );
 
@@ -157,7 +158,7 @@ const DRUMS = new Set([
 	'cb',
 	'perc'
 ]);
-const SYNTHS = new Set(['sawtooth', 'square', 'triangle', 'sine', 'supersaw']);
+const SYNTHS = new Set(['sawtooth', 'square', 'triangle', 'sine', 'supersaw', 'pulse']);
 const NOISE = new Set(['white', 'pink', 'brown']);
 /** Dirt-Samples one-shots for the vox layer: vocals, rave stabs and FX. Pick variants with 'rave:4'. */
 export const VOX = new Set([

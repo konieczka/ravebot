@@ -1,4 +1,5 @@
 import type { ArcStyle } from './arrangement';
+import { mixProfile, type MixProfile } from './mix';
 import type { Seed } from './seeds/types';
 import { ACID } from './seeds/acid';
 import { DETROIT } from './seeds/detroit';
@@ -34,6 +35,8 @@ export interface Genre {
 	modes?: string[];
 	/** How tracks of this genre build up and drop (see arrangement.ts). */
 	arc: ArcStyle;
+	/** How tracks of this genre are mixed: groove feel, bus processing and levels (see mix.ts). */
+	mix: MixProfile;
 	/** Hand-written tracks: few-shot examples for the LLM and the offline fallback pool. */
 	seeds: Seed[];
 }
@@ -60,6 +63,7 @@ export const GENRES: Genre[] = [
 			duck: 0.3,
 			breakdown: { perc: 0.8 }
 		},
+		mix: mixProfile({ accent: 0.45, glue: 0.4, drive: 0.2, rumble: 0.35, bass: 4.5, synth: 17 }),
 		seeds: MINIMAL
 	},
 	{
@@ -77,6 +81,7 @@ export const GENRES: Genre[] = [
 			// The classic acid breakdown: the 303 line keeps squelching on its own.
 			breakdown: { bass: 1, perc: 0.6, hats: 0.3 }
 		},
+		mix: mixProfile({ swing: 0.53, glue: 0.55, bassDrive: 0.45, bass: 8, synth: 19 }),
 		seeds: ACID
 	},
 	{
@@ -93,6 +98,18 @@ export const GENRES: Genre[] = [
 			duck: 0.6,
 			breakdown: { perc: 0.5, hats: 0 }
 		},
+		mix: mixProfile({
+			swing: 0.51,
+			accent: 0.35,
+			glue: 0.8,
+			drive: 0.6,
+			bassDrive: 0.5,
+			synthDrive: 0.45,
+			rumble: 0.9,
+			space: 6000,
+			bass: -0.5,
+			synth: 22
+		}),
 		seeds: HARD
 	},
 	{
@@ -110,6 +127,17 @@ export const GENRES: Genre[] = [
 			duck: 0.35,
 			breakdown: { hats: 0.4, perc: 0.6 }
 		},
+		mix: mixProfile({
+			swing: 0.56,
+			jitter: 0.1,
+			glue: 0.35,
+			drive: 0.25,
+			synthDrive: 0.2,
+			rumble: 0.5,
+			space: 3500,
+			bass: -3,
+			synth: 11
+		}),
 		seeds: DUB
 	},
 	{
@@ -126,6 +154,15 @@ export const GENRES: Genre[] = [
 			duck: 0.35,
 			breakdown: { hats: 0.5, perc: 0.8 }
 		},
+		mix: mixProfile({
+			swing: 0.57,
+			accent: 0.55,
+			glue: 0.45,
+			drift: 6,
+			space: 9000,
+			bass: 3,
+			synth: 9.5
+		}),
 		seeds: DETROIT
 	},
 	{
@@ -142,6 +179,7 @@ export const GENRES: Genre[] = [
 			duck: 0.3,
 			breakdown: { perc: 1, hats: 0.6 }
 		},
+		mix: mixProfile({ swing: 0.55, rumble: 0.8, synthDrive: 0.3, space: 5000, bass: 1, synth: 15 }),
 		seeds: HYPNOTIC
 	},
 	{
@@ -164,6 +202,16 @@ export const GENRES: Genre[] = [
 			breakdown: { hats: 0.4, perc: 0.6 },
 			build: { kick: 1, bass: 1, hats: 1, perc: 1, synth: 1, vox: 0 }
 		},
+		mix: mixProfile({
+			swing: 0.56,
+			glue: 0.6,
+			drive: 0.35,
+			drift: 4,
+			synthDuck: 1,
+			space: 10000,
+			bass: 3,
+			synth: 16.5
+		}),
 		seeds: FRENCH
 	},
 	{
@@ -181,6 +229,16 @@ export const GENRES: Genre[] = [
 			duck: 0,
 			breakdown: { hats: 0.4, perc: 0.6 }
 		},
+		mix: mixProfile({
+			swing: 0.5,
+			accent: 0.4,
+			glue: 0.55,
+			drive: 0.35,
+			drift: 3,
+			space: 8000,
+			bass: 3.5,
+			synth: 15
+		}),
 		seeds: PSY
 	},
 	{
@@ -202,6 +260,18 @@ export const GENRES: Genre[] = [
 			// The crowd chant carries through the build: a count on its last bar leads into the drop.
 			build: { vox: 1 }
 		},
+		mix: mixProfile({
+			swing: 0.5,
+			accent: 0.35,
+			glue: 0.7,
+			drive: 0.55,
+			bassDrive: 0.4,
+			synthDuck: 0.6,
+			space: 8000,
+			bass: -2,
+			synth: 20,
+			vox: 2
+		}),
 		seeds: HARDBASS
 	}
 ];

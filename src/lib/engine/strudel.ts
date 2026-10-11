@@ -1,6 +1,8 @@
 import type { Pattern, StrudelRepl } from '@strudel/web';
 import { LAYERS, type Layers } from '#lib/dj/types.js';
 import { RUS_BASE, RUS_FILES } from '#lib/dj/voices.js';
+import type { MixProfile } from '#lib/dj/mix.js';
+import { MixDesk, type AudioController } from './master.js';
 import { ORBITS } from './mixer.js';
 
 /**
@@ -16,6 +18,7 @@ const DIRT_SAMPLES = 'github:tidalcycles/dirt-samples';
 let repl: StrudelRepl | null = null;
 let web: typeof import('@strudel/web') | null = null;
 let lastEvalError: Error | null = null;
+let desk: MixDesk | null = null;
 
 export async function initEngine(): Promise<void> {
 	if (repl) return;
@@ -37,6 +40,14 @@ export async function initEngine(): Promise<void> {
 	const ready = web.initAudioOnFirstClick();
 	document.dispatchEvent(new MouseEvent('mousedown'));
 	await ready;
+	// Splice the mixing desk (bus processing, master chain) into superdough before anything plays.
+	desk = new MixDesk(
+		web.getAudioContext(),
+		web.getSuperdoughAudioController() as AudioController,
+		web.webAudioTimeout
+	);
+	desk.install();
+	if (import.meta.env.DEV) (globalThis as any).__ravebotDesk = desk;
 	// Create every deck orbit up front with a silent note. The kick ducks its deck's music and vox
 	// orbits, and superdough logs an error on every kick while a target orbit does not exist yet
 	// (the vox stays silent for the first 32 bars of a track).
@@ -76,8 +87,16 @@ function preload(name: string, value: Record<string, unknown>): Promise<unknown>
 export async function play(code: string): Promise<void> {
 	if (!repl) throw new Error('engine not initialised');
 	lastEvalError = null;
+	desk?.ensureMaster();
 	const pattern = await repl.evaluate(code);
 	if (!pattern) throw lastEvalError ?? new Error('evaluation failed');
+}
+
+/** Sets each deck's bus processing and the master bus from the genres' mix profiles. */
+export function setMix(decks: [MixProfile, MixProfile], master: MixProfile): void {
+	desk?.setDeckMix(0, decks[0]);
+	desk?.setDeckMix(1, decks[1]);
+	desk?.setMasterMix(master);
 }
 
 export function stop(): void {

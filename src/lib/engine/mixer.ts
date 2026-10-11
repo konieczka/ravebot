@@ -9,6 +9,7 @@ import {
 	type Position,
 	type Timeline
 } from '#lib/dj/arrangement.js';
+import { BASE_MIX, blendMix, humanize, swingAmount, type MixProfile } from '#lib/dj/mix.js';
 import { LAYERS, type LayerName, type Track } from '#lib/dj/types.js';
 
 export type Deck = 0 | 1;
@@ -94,15 +95,44 @@ export class Mixer {
 		return pos ? djFilter(this.timelines[deck]!, pos) : 0.5;
 	}
 
+	/** Mix profile of a deck's track. */
+	mix(deck: Deck): MixProfile {
+		return this.timelines[deck]?.mix ?? BASE_MIX;
+	}
+
 	/**
-	 * Kick sidechain depths on the deck's [music, vox] orbits. They follow the kick's level, so
-	 * nothing pumps while the kick is out.
+	 * Kick sidechain depths on the deck's [bass, synth, vox, rumble] buses. They follow the kick's
+	 * level, so nothing pumps while the kick is out. The synth bus gets a share of the bass depth so
+	 * leads are not pushed down as hard as the bass; the rumble always breathes with the kick.
 	 */
-	duck(deck: Deck, cycle: number): [number, number] {
+	duck(deck: Deck, cycle: number): [number, number, number, number] {
 		const tl = this.timelines[deck];
-		if (!tl) return [0, 0];
+		if (!tl) return [0, 0, 0, 0];
 		const kick = this.gain(deck, 'kick', cycle);
-		return [tl.style.duck * kick, (tl.style.voxDuck ?? tl.style.duck) * kick];
+		const { duck, voxDuck } = tl.style;
+		const mix = this.mix(deck);
+		return [duck * kick, duck * mix.synthDuck * kick, (voxDuck ?? duck) * kick, 0.9 * kick];
+	}
+
+	/** Per-hit humanization of a layer event at track time `t` (see mix.ts). */
+	humanize(deck: Deck, layer: LayerName, value: Record<string, unknown>, t: number) {
+		return humanize(value, layer, t, this.mix(deck), deck);
+	}
+
+	/** The deck's rumble send: it follows the kick through the arrangement and the blend (the bus sets its level). */
+	rumble(deck: Deck, cycle: number): number {
+		return this.mix(deck).rumble > 0 ? this.gain(deck, 'kick', cycle) : 0;
+	}
+
+	/**
+	 * The master bus profile at a cycle: the live deck's, blended toward the incoming deck's along
+	 * the transition, so a genre change never jumps.
+	 */
+	masterMix(cycle: number): MixProfile {
+		const plan = this.plan;
+		if (!plan) return this.mix(this.live);
+		const p = clamp01((cycle - plan.start) / plan.bars);
+		return blendMix(this.mix(plan.from), this.mix(plan.to), ramp(p, 0.25, 0.75));
 	}
 
 	fx(deck: Deck, fx: FxName, cycle: number): number {
@@ -131,19 +161,29 @@ export const MIXER_GLOBAL = '__ravebot';
 
 const M = MIXER_GLOBAL;
 /**
- * Each deck's drums, bass + synth and vox go to separate orbits, so the kick can duck the music
- * and the vocals by different amounts.
+ * Each deck mixes into its own buses (Strudel orbits), and the engine processes every bus
+ * separately (see master.ts): drums get glue, the bass keeps a mono sub that alone is ducked by the
+ * kick, the synth bus is high-passed with presence and saturation, vox sits on its own, and the
+ * rumble send is distorted and low-passed.
  */
-const DRUM_ORBIT = (deck: number) => 1 + deck * 2;
-const MUSIC_ORBIT = (deck: number) => 2 + deck * 2;
-const VOX_ORBIT = (deck: number) => 5 + deck;
-const DRUM_LAYERS = new Set<LayerName>(['kick', 'hats', 'perc']);
+export const BUSES = ['drums', 'bass', 'synth', 'vox', 'rumble'] as const;
+export type BusName = (typeof BUSES)[number];
+export const busOrbit = (bus: BusName, deck: number) =>
+	1 + deck * BUSES.length + BUSES.indexOf(bus);
 /** Every orbit the two decks use. */
-export const ORBITS = [0, 1].flatMap((d) => [DRUM_ORBIT(d), MUSIC_ORBIT(d), VOX_ORBIT(d)]);
-const orbitOf = (layer: LayerName, deck: number) =>
-	layer === 'vox' ? VOX_ORBIT(deck) : DRUM_LAYERS.has(layer) ? DRUM_ORBIT(deck) : MUSIC_ORBIT(deck);
+export const ORBITS = [0, 1].flatMap((d) => BUSES.map((b) => busOrbit(b, d)));
+const BUS_OF: Record<LayerName, BusName> = {
+	kick: 'drums',
+	hats: 'drums',
+	perc: 'drums',
+	bass: 'bass',
+	synth: 'synth',
+	vox: 'vox'
+};
 /** Drop silent events (breakdowns, faded decks) so they never reach the audio graph. */
 const AUDIBLE = '.filterValues(v => v.postgain > 0.001)';
+/** Layers whose 16ths get the genre's swing; the kick stays on the grid. */
+const SWUNG = new Set<LayerName>(['hats', 'perc']);
 
 /**
  * Builds the single Strudel program that plays both decks. Every layer gets a `postgain` driven by
@@ -162,24 +202,40 @@ export function buildProgram(decks: [Track | null, Track | null], mixer: Mixer):
 		if (!track || !tl) return;
 		const deckFx = `.djf(signal(t => ${M}.djf(${deck}, t)))`;
 		const layers: string[] = [];
+		const mix = mixer.mix(deck as Deck);
+		const orbit = (bus: BusName) => busOrbit(bus, deck);
+		const ducks = tl.style.duck > 0 || (tl.style.voxDuck ?? 0) > 0 || mix.rumble > 0;
 		for (const layer of LAYERS) {
 			const expr = track.layers[layer];
 			if (!expr || expr === 'silence') continue;
-			const orbit = orbitOf(layer, deck);
 			// Array values duck several orbits, each with its own depth.
 			const duck =
-				layer === 'kick' && (tl.style.duck > 0 || (tl.style.voxDuck ?? 0) > 0)
-					? `.duckorbit(signal(() => [${MUSIC_ORBIT(deck)}, ${VOX_ORBIT(deck)}])).duckattack(.16)` +
+				layer === 'kick' && ducks
+					? `.duckorbit(signal(() => [${(['bass', 'synth', 'vox', 'rumble'] as const).map(orbit).join(', ')}])).duckattack(.16)` +
 						`.duckdepth(signal(t => ${M}.duck(${deck}, t)))`
 					: '';
+			// Swing unless the layer already swings itself.
+			const swing =
+				SWUNG.has(layer) && !expr.includes('swing') && swingAmount(mix.swing) > 0
+					? `.swingBy(${swingAmount(mix.swing).toFixed(3)}, 8)`
+					: '';
+			const human = `.withHap(h => h.withValue(v => ${M}.humanize(${deck}, '${layer}', v, h.whole ? h.whole.begin.valueOf() : 0)))`;
 			layers.push(
-				`    (${expr}).late(${tl.origin}).orbit(${orbit})${duck}${deckFx}` +
+				`    (${expr})${swing}${human}.late(${tl.origin}).orbit(${orbit(BUS_OF[layer])})${duck}${deckFx}` +
 					`.postgain(signal(t => ${M}.gain(${deck}, '${layer}', t)))${AUDIBLE}`
 			);
 		}
+		// Rumble: the kick, fully wet into a long dark reverb on its own bus (distorted, low-passed
+		// and ducked there), the low-end weight of Berlin techno.
+		const kick = track.layers.kick;
+		if (mix.rumble > 0 && kick && kick !== 'silence')
+			layers.push(
+				`    (${kick}).late(${tl.origin}).orbit(${orbit('rumble')}).room(1).roomsize(4).roomfade(.5).roomlp(1200).roomdim(200).dry(0)${deckFx}` +
+					`.postgain(signal(t => ${M}.rumble(${deck}, t)))${AUDIBLE}`
+			);
 		const fx = (name: FxName, code: string) =>
 			layers.push(
-				`    ${code}.orbit(${DRUM_ORBIT(deck)})${deckFx}` +
+				`    ${code}.orbit(${orbit('drums')})${deckFx}` +
 					`.postgain(signal(t => ${M}.fx(${deck}, '${name}', t)))${AUDIBLE}`
 			);
 		const { roll, riser, impact } = tl.style;

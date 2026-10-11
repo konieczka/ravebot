@@ -222,8 +222,11 @@ export class DjBrain {
 	// ── main loop ───────────────────────────────────────────────────────────
 
 	private async tick() {
-		if (this.status !== 'live' || this.busy) return;
+		if (this.status !== 'live') return;
 		const c = engine.now();
+		// Bus processing follows each deck's genre; the master blends between them in a transition.
+		engine.setMix([this.mixer.mix(0), this.mixer.mix(1)], this.mixer.masterMix(c));
+		if (this.busy) return;
 
 		if (Math.abs(this.targetBpm - this.bpm) > 0.01) {
 			const diff = this.targetBpm - this.bpm;
@@ -410,7 +413,8 @@ export class DjBrain {
 	// ── helpers ─────────────────────────────────────────────────────────────
 
 	private timeline(track: Track, origin: number) {
-		return { origin, style: genreById(track.genre).arc };
+		const { arc, mix } = genreById(track.genre);
+		return { origin, style: arc, mix };
 	}
 
 	private glitch(text: string) {

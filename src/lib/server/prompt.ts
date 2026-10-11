@@ -26,7 +26,7 @@ Sound sources:
        RolandTR606: bd sd hh oh lt ht cr
      drum names: bd (kick) sd (snare) hh (closed hat) oh (open hat) cp (clap) rim lt mt ht (toms) cr rd
   Synths NEVER use a bank:   note('c2 eb2 g2').s('sawtooth')
-     synth names: sawtooth square triangle sine supersaw (nothing else)
+     synth names: sawtooth square triangle sine supersaw pulse (nothing else)
   Scale degrees:             n('0 2 4 7').scale('C:minor').s('triangle')
   Noise (synth layer only):  s('white*16').hpf(5000)   noise names: white pink
   Vox one-shots (vox layer only, never a bank; pick a variant with ':n'):
@@ -52,6 +52,13 @@ Pattern transforms: .fast(2) .slow(2) .rev() .ply(2) .degradeBy(.3) .sometimesBy
   Filter envelope (acid plucks): .lpf(300).lpenv(4).lpa(.01).lpd(.12).lpq(14)
   FM and pitch envelope (zaps): .fm(4).fmh(1.5) .penv(12).pdecay(.05)
   Hollow FM "donk" bass: note('[~ a1]*4').s('sine').fm(3).fmh(2).fmwave('triangle').fmdecay(.12).fmsustain(.25).decay(.3).sustain(0)
+  Warm analog sound (sounds far less like MIDI than a bare oscillator):
+    .ftype('ladder') a 24 dB Moog/303-style low-pass for .lpf (lpq 0-20, 25+ screams), .drive(1) to push it
+    supersaw: .unison(7).detune(.25).spread(.8) (voices, detune, stereo spread)
+    pulse: note('a3').s('pulse').pw(.3) (pulse width .1-.9, hollow and nasal)
+    .noise(.08) breath and grit on an oscillator
+    Layered bass: stack(note('a1').s('sine'), note('a1').s('sawtooth').hpf(180).lpf(900)) clean sub + gritty top
+    Long dark reverb: .room(.6).roomsize(4).roomlp(3000)
   .phaser(2) (swirling disco loop)  .vib(6).vibmod(.3) (vibrato, e.g. whistles)
   Short tight kick: s('bd*4').bank('RolandTR909').decay(.15).sustain(0)
 Combine: stack(a, b)  cat(a, b)
@@ -64,6 +71,7 @@ RULES
 - '~' is a rest and stands alone: 'cp ~ cp' (never 'cp~').
 - Signals are not functions: saw.range(300,900) (never saw(300,900)). Only use methods listed above.
 - Keep levels sane: kick gain <= 1, hats .2-.6, synth .1-.35, vox .3-.7. Bass and kick must not fight (bass on off-beats or short notes).
+- The engine mixes the track like a studio: it swings and humanizes the hats, drifts the synths, compresses, EQs, adds sub rumble and masters it. Do not fake those with long effect chains; spend your effort on good patterns and sound design.
 - Write every layer as a full-energy loop. The DJ engine arranges the track for you: it brings layers in one by one, strips them for the breakdown, adds snare rolls, risers and the drop. Never try to arrange with long masks.
 - Vox is sparse: one shot every 4-8 bars, with delay/room. Silence most of the time.
 `.trim();

@@ -1,3 +1,4 @@
+import type { MixProfile } from './mix';
 import type { LayerName } from './types';
 
 /**
@@ -48,6 +49,8 @@ export interface Timeline {
 	/** Absolute cycle of track bar 0. */
 	origin: number;
 	style: ArcStyle;
+	/** How the track is mixed; the shared base profile when missing. */
+	mix?: MixProfile;
 }
 
 export interface Position {

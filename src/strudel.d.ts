@@ -21,6 +21,13 @@ declare module '@strudel/web' {
 		baseUrl?: string
 	): Promise<void>;
 	export function getAudioContext(): AudioContext;
+	export function getSuperdoughAudioController(): unknown;
+	export function webAudioTimeout(
+		ac: AudioContext,
+		onComplete: () => void,
+		startTime: number,
+		stopTime: number
+	): void;
 	export function initAudioOnFirstClick(options?: object): Promise<void>;
 	export function getSound(name: string): unknown;
 	export function getSampleBuffer(value: object, samples: unknown): Promise<unknown>;
