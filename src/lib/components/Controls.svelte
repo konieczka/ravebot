@@ -62,16 +62,22 @@
 		</label>
 		<div class="seg" role="group" aria-label="Track source">
 			<button
-				class:on={dj.source === 'ai'}
-				onclick={() => dj.setSource('ai')}
-				aria-pressed={dj.source === 'ai'}
-				title="An LLM writes new Strudel tracks for the set">AI</button
-			>
-			<button
 				class:on={dj.source === 'local'}
 				onclick={() => dj.setSource('local')}
 				aria-pressed={dj.source === 'local'}
 				title="Only remix the built-in hand-written tracks, no LLM calls">LOCAL CRATE</button
+			>
+			<button
+				class:on={dj.source === 'combo'}
+				onclick={() => dj.setSource('combo')}
+				aria-pressed={dj.source === 'combo'}
+				title="Alternate local crate and AI tracks: local, AI, local, AI...">COMBO</button
+			>
+			<button
+				class:on={dj.source === 'ai'}
+				onclick={() => dj.setSource('ai')}
+				aria-pressed={dj.source === 'ai'}
+				title="An LLM writes new Strudel tracks for the set">AI</button
 			>
 		</div>
 	</section>
@@ -231,7 +237,7 @@
 	}
 	.seg {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr 1fr 1fr;
 	}
 	.seg button + button {
 		border-left: 0;

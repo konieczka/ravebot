@@ -22,8 +22,19 @@ const TICK_MS = 200;
 const BPM_STEP = 0.08;
 
 export type Status = 'off' | 'booting' | 'live';
-/** Where new tracks come from: the LLM, or only the built-in seed tracks remixed locally. */
-export type TrackSource = 'ai' | 'local';
+/**
+ * Where new tracks come from: the LLM, only the built-in seed tracks remixed locally, or both
+ * taking turns (local -> AI -> local -> ...).
+ */
+export type TrackSource = 'ai' | 'local' | 'combo';
+/** Where one track is actually written: combo resolves to one of these per slot. */
+export type WriteSource = Exclude<TrackSource, 'combo'>;
+
+const SOURCE_REASONS: Record<TrackSource, string> = {
+	ai: 'AI generation on',
+	local: 'Local crate only',
+	combo: 'Combo: crate and AI taking turns'
+};
 export type Mood = 'idle' | 'groove' | 'think' | 'mix' | 'glitch';
 
 /** The track currently being written, and the settings it was asked for. */
@@ -32,7 +43,7 @@ export interface WriteJob {
 	bpm: number;
 	energy: number;
 	weirdness: number;
-	source: TrackSource;
+	source: WriteSource;
 }
 
 /**
@@ -41,7 +52,7 @@ export interface WriteJob {
  */
 export class DjBrain {
 	// Controls
-	source = $state<TrackSource>('ai');
+	source = $state<TrackSource>('combo');
 	genre = $state<GenreId>('minimal');
 	targetBpm = $state(128);
 	energy = $state(6);
@@ -124,7 +135,7 @@ export class DjBrain {
 	setSource(source: TrackSource) {
 		if (source === this.source) return;
 		this.source = source;
-		this.invalidateQueue(source === 'ai' ? 'AI generation on' : 'Local crate only');
+		this.invalidateQueue(SOURCE_REASONS[source]);
 	}
 
 	toggleLock(layer: LayerName) {
@@ -315,15 +326,20 @@ export class DjBrain {
 			previous: current ? { title: current.title, layers: current.layers } : undefined
 		};
 
+		// Combo alternates off the track this one follows: after an AI track dig the crate, otherwise
+		// ask the AI (a failed AI write lands as a crate track, so the next slot retries the AI).
+		const source: WriteSource =
+			this.source === 'combo' ? (current?.source === 'llm' ? 'local' : 'ai') : this.source;
+
 		this.writing = {
 			genre,
 			bpm: req.bpm,
 			energy: req.energy,
 			weirdness: req.weirdness,
-			source: this.source
+			source
 		};
 		let track: Track;
-		if (this.source === 'local') {
+		if (source === 'local') {
 			track = fallbackTrack(genre, current?.layers);
 		} else {
 			try {

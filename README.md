@@ -9,7 +9,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the page and press **WAKE UP RAVEBOT**. Without any configuration the bot runs in **offline mode**: it remixes its built-in seed tracks layer by layer, so you can work on the UI and the mixer without an LLM. The **Track source** switch (AI generated / Local crate) forces the same local mode at any time, even with a gateway configured.
+Open the page and press **WAKE UP RAVEBOT**. Without any configuration the bot runs in **offline mode**: it remixes its built-in seed tracks layer by layer, so you can work on the UI and the mixer without an LLM. The **Track source** switch (Local crate / Combo / AI) forces the same local mode at any time, even with a gateway configured; **Combo** alternates the two, writing local, AI, local, AI and so on.
 
 ## Connect an LLM (Cloudflare AI Gateway)
 
@@ -45,7 +45,7 @@ Controls ─► DjBrain (src/lib/dj/brain.svelte.ts) ─► /api/generate ─►
 - **The club:** the top of the page is a 480×270 pixel-art canvas (`src/lib/club/scene.ts`), drawn every frame and scaled up with crisp pixels. It reads no audio: every light and dancer follows the same schedule the music uses (the beat phase of the Strudel clock, `Mixer.gain()` per layer and the arrangement section), so it stays exactly on the beat. Kick moves the crowd and the speakers, hats flick the wristbands and balcony neon, bass drives the booth underglow, synth turns on the lasers, vox lights the neon signs, and the breakdown, build, blackout and drop each get their own scene. The light show (`src/lib/club/lights.ts`) changes its looks on 4-bar phrases: moving heads fan, cross, sweep, chase or close in on RaveBot and light up the crowd's heads; the lasers sweep in the groove, lay a sheet over the crowd in the breakdown, close in like a tunnel through the build, burst on the drop and scan in 16ths at the peak; blinders hit on the drop. A soft bloom glows round every light, and when the energy is up the picture shakes on the kick (hardest on the drop, never in the breakdown, and not at all with reduced motion). On phones the canvas is cropped to the booth.
 - **Stages:** the club can stand in Berlin, Warsaw or Paris (`src/lib/club/cities/`). Each city brings its own view through the back window (landmarks, a train or tram crossing a river bridge, things that blink and sparkle on the beat), neon slogans and banners in the local language, the sticker on the booth, and its own club around the stage: an old power station in Berlin (control panel and generator), a red-brick vodka distillery in Warsaw (copper still, rescued neon signs) and an Art Nouveau hall in Paris (Guimard Métro entrance, café terrace). Their machines, lamps and signs run on the music too. The choice is remembered in the browser.
 - **Queue:** the brain writes up to 3 tracks ahead, one at a time, each following the last one queued. Cards show the playing track's arc, the queued tracks (flip to read the code, or drop one to have it rewritten) and the one being written. Changing subgenre, source, energy or weirdness rewrites the queue.
-- **Controls:** track source (AI or local crate), subgenre, BPM (the app owns the tempo and glides at ~0.4 BPM/s), AI-only settings (energy and weirdness, which also raises the LLM temperature), skip, hold, and the stage switcher.
+- **Controls:** track source (local crate, combo alternating both — the default — or AI), subgenre, BPM (the app owns the tempo and glides at ~0.4 BPM/s), AI-only settings (energy and weirdness, which also raises the LLM temperature), skip, hold, and the stage switcher.
 
 ## Scripts
 

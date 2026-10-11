@@ -98,7 +98,13 @@
 		<div class="hud tr">
 			<span>{section.toUpperCase()}</span><span>·</span>
 			<span>
-				{dj.source === 'local' ? 'LOCAL CRATE' : dj.offline ? 'AI OFFLINE' : 'AI MODE'}
+				{dj.source === 'local'
+					? 'LOCAL CRATE'
+					: dj.offline
+						? 'AI OFFLINE'
+						: dj.source === 'combo'
+							? 'COMBO MODE'
+							: 'AI MODE'}
 			</span>
 		</div>
 	{/if}
