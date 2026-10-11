@@ -187,15 +187,18 @@ export const GENRES: Genre[] = [
 		id: 'hardbass',
 		name: 'Hardbass',
 		bpm: 158,
+		modes: ['minor', 'harmonic minor'],
 		brief:
-			"Russian hardbass (St Petersburg, XS Project style): fast, bouncy and cheeky. A hard, distorted kick on every beat and a metallic 'donk' bass on every off-beat between the kicks (a sine or square note with .fm(), a pitch envelope like .penv(12).pdecay(.05) and a short decay). Open hats on the off-beat, claps on 2 and 4, a cheesy 90s rave lead or hoover riff, whistles (a high sine with .vib()) and shouted rave vocals. Simple, catchy, pumping.",
+			"Russian hardbass (St Petersburg, XS Project style): fast, bouncy and cheeky. The 'bochka': a long, distorted kick sample on every beat (hardkick or gabba, no bank) cut with .decay(.18).sustain(0) so it ends right before the off-beat. The hollow 'donk' bass on every off-beat between the kicks: a sine at octave 1-2 with 2:1 FM, .fm(3).fmh(2).fmwave('triangle').fmdecay(.12).fmsustain(.25), a .3 decay and some .shape(). Off-beat open hats, claps on 2 and 4, Slavic melodies in harmonic minor (raised 7th) on a supersaw, square or tremolo-picked balalaika pluck (.ply(4) with a short decay), hoovers, whistles (a high sine with .vib()) and Russian shouts (rus:0 'davai', rus:8 'pognali', counting rus:2 rus:3 rus:4). Simple, catchy, pumping.",
 		arc: {
 			roll: { s: 'sd', bank: 'RolandTR909' },
 			riser: 'white',
 			impact: true,
 			gap: true,
 			duck: 0.5,
-			breakdown: { hats: 0.5, perc: 0.5 }
+			breakdown: { hats: 0.5, perc: 0.5 },
+			// The crowd chant carries through the build: a count on its last bar leads into the drop.
+			build: { vox: 1 }
 		},
 		seeds: HARDBASS
 	}

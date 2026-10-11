@@ -110,6 +110,19 @@ describe('levels', () => {
 	});
 });
 
+describe('hardbass', () => {
+	it('keeps the chant going through the build, up to the beat of silence', () => {
+		const hardbass = { ...tl, style: GENRES.find((g) => g.id === 'hardbass')!.arc };
+		expect(layerLevel(hardbass, at(79), 'vox')).toBe(1);
+		expect(layerLevel(hardbass, at(79), 'kick')).toBe(0);
+		expect(layerLevel(hardbass, at(79.8), 'vox')).toBe(0);
+		// The count on bar 8 of a phrase is the last bar of the build: the drop starts the next phrase.
+		expect(at(79).kind).toBe('build');
+		expect(at(80).kind).toBe('peak');
+		expect((80 - SECTIONS[0].start) % 8).toBe(0);
+	});
+});
+
 describe('build-up fx', () => {
 	const fx = (bar: number, name: 'roll' | 'riser' | 'impact') =>
 		fxLevel(tl, at(bar), name, tl.origin + bar, at(Math.floor(bar) - 0.5));

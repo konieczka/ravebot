@@ -82,7 +82,10 @@ describe('musical lint', () => {
 		["s('cp 2 cp 4, rim(7,16)').bank('RolandTR909')", 'perc', /numbers are not sounds/],
 		["s('rim(3,8) ~').bank('RolandTR606')", 'perc', /RolandTR606 has no rim/],
 		["note('g1').scale('Bdim7').s('square')", 'bass', /scale\(\) works with scale degrees/],
-		["s('white*16').hpf(saw(3000,9000))", 'synth', /saw is a signal/]
+		["s('white*16').hpf(saw(3000,9000))", 'synth', /saw is a signal/],
+		["s('hardkick:4*4').bank('RolandTR909')", 'kick', /only works with drum sounds/],
+		["s('~ gabba ~ gabba')", 'perc', /"gabba" does not belong in the perc layer/],
+		["s('rus:0')", 'synth', /"rus" does not belong in the synth layer/]
 	] as const)('rejects %s in %s', (code, role, msg) => {
 		expect(() => validateLayer(code, role)).toThrow(msg);
 	});
@@ -92,6 +95,17 @@ describe('musical lint', () => {
 			validateLayer("s('rim(3,8), mt(5,16,2), cp:2').bank('RolandTR808')", 'perc')
 		).not.toThrow();
 		expect(() => validateLayer("s('white*16').hpf(4000)", 'synth')).not.toThrow();
+	});
+
+	it('allows the bochka kick samples without a bank, the FM donk and Russian shouts', () => {
+		expect(() => validateLayer("s('hardkick:4*4').decay(.18).sustain(0)", 'kick')).not.toThrow();
+		expect(() =>
+			validateLayer(
+				"note('[~ a1]*4').s('sine').fm(3).fmh(2).fmwave('triangle').fmdecay(.12).fmsustain(.25)",
+				'bass'
+			)
+		).not.toThrow();
+		expect(() => validateLayer("s('<rus:0 ~ ~ [rus:2 rus:3 rus:4 ~]>')", 'vox')).not.toThrow();
 	});
 });
 
