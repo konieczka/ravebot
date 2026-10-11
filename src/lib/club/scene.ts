@@ -2,6 +2,7 @@ import type { SectionKind } from '#lib/dj/arrangement.js';
 import { LAYERS, type LayerName } from '#lib/dj/types.js';
 import { text, textC } from './font.js';
 import { Crowd } from './crowd.js';
+import { SHOULDERS, choreograph, type Pose } from './moves.js';
 import { HEAD, TORSO, cuff, hand, headSprite, neck, torsoSprite, tube } from './robot.js';
 
 /**
@@ -587,6 +588,7 @@ export class ClubScene {
 			g.globalAlpha = i.live ? 0.08 + 0.1 * E.kick + 0.12 * f.brk + 0.05 * E.bass : 0.05;
 			g.drawImage(this.fog, -((this.t * 5) % W), 100);
 		});
+		this.choreograph(f, dt);
 		this.robot(f, 'body');
 		g.drawImage(this.booth, 0, 0);
 		this.boothLive(f);
@@ -769,38 +771,44 @@ export class ClubScene {
 		});
 	}
 
-	private armUp({ i, kind }: Frame) {
-		if (!i.live) return 0;
-		if (kind === 'peak') {
-			const b = i.x * 32;
-			if (b < 4) return 1;
-			if (b % 8 < 1) return clamp(1 - ((b % 8) - 0.75) * 4, 0, 1);
-		}
-		if (kind === 'build' && i.x > 0.75) return (i.x - 0.75) * 4;
-		if (kind === 'main' && (i.x * 24) % 16 < 1) return 0.9;
-		return 0;
+	/** RaveBot's current move, and his arms easing towards it. */
+	private pose: Pose | null = null;
+	private arms: { hand: Pt; elbow: Pt }[] = SHOULDERS.map(() => ({ hand: [0, 0], elbow: [0, 0] }));
+
+	private choreograph({ i }: Frame, dt: number) {
+		const pose = choreograph({
+			live: i.live,
+			section: i.section,
+			x: i.x,
+			cycle: i.cycle,
+			kick: this.sm.kick,
+			energy: i.energy,
+			intensity: i.intensity,
+			mixing: i.mixing,
+			crossfade: i.crossfade
+		});
+		// Fast enough to hit every beat, slow enough that a change of move reads as motion.
+		const k = this.pose ? 1 - Math.exp(-dt * 16) : 1;
+		[pose.left, pose.right].forEach((target, n) => {
+			const a = this.arms[n];
+			for (const key of ['hand', 'elbow'] as const)
+				for (const c of [0, 1]) a[key][c] += (target[key][c] - a[key][c]) * k;
+		});
+		this.pose = pose;
 	}
 
 	private robot(f: Frame, part: 'body' | 'arms') {
 		const g = this.g;
-		const { i, E, ph, beat } = f;
-		const cx = 240;
-		const nod = !i.live
-			? 0
-			: this.sm.kick > 0.2
-				? ph < 0.25
-					? 2
-					: ph < 0.5
-						? 1
-						: 0
-				: Math.round(Math.sin(i.cycle * Math.PI) * 0.6 + 0.6);
-		const top = 78 + nod;
-		const tb = Math.min(1, nod);
+		const { i, E, ph } = f;
+		const pose = this.pose!;
+		const cx = 240 + pose.sway;
+		const top = 78 + pose.nod;
+		const tb = pose.bob;
 
 		if (part === 'body') {
 			g.drawImage(torsoSprite(), cx - TORSO.cx, 104 + tb);
-			neck(g, cx, 101 + nod);
-			const hx = cx - HEAD.cx;
+			neck(g, cx + pose.tilt, 101 + Math.min(pose.nod, 2));
+			const hx = cx + pose.tilt - HEAD.cx;
 			g.drawImage(headSprite(), hx, top);
 			const v = HEAD.visor;
 			this.visor(hx + v.x, top + v.y, f);
@@ -814,43 +822,29 @@ export class ClubScene {
 			if (i.thinking)
 				for (let k = 0; k < 3; k++)
 					if (Math.floor(this.t * 3) % 4 > k)
-						px(g, cx + 17 + k * 3, top - 2 - k * 2, 2, 2, '#ece8ff');
+						px(g, hx + HEAD.cx + 17 + k * 3, top - 2 - k * 2, 2, 2, '#ece8ff');
 			return;
 		}
 
 		// Arms are drawn over the booth so the hands rest on the decks.
-		const xf = i.crossfade;
-		const wig = i.live ? Math.sin((beat * Math.PI) / 2) * 2 : 0;
-		const up = this.armUp(f);
-		const sy = 111 + tb;
 		const led = i.live ? rgba(i.accent, 0.5 + 0.5 * E.hats) : '#3a3550';
-
-		// Right arm (screen right): on deck B's jog, or on the crossfader while mixing.
-		// While mixing, the right hand rides the crossfader and the left one works the channel EQs.
-		const rh: Pt = i.mixing
-			? [233 + Math.round(xf * 14), 133]
-			: [cx + 48 + wig, 128 + (E.perc > 0.6 ? 1 : 0)];
-		const re: Pt = i.mixing ? [cx + 27, 129] : [cx + 29, 127];
-		tube(g, cx + 17, sy, re[0], re[1], 3);
-		tube(g, re[0], re[1], rh[0], rh[1] - 1, 2.6);
-		cuff(g, lerp(re[0], rh[0], 0.8), lerp(re[1], rh[1] - 2, 0.8), PINK, E.hats);
-		hand(g, rh[0], rh[1], 'flat', led);
-
-		// Left arm: on deck A, on the mixer, or punching the air.
-		const lDown: Pt = i.mixing ? [cx - 16 + Math.round(wig), 128] : [cx - 46, 129];
-		const lUp: Pt = [cx - 31, 68 + nod];
-		const lh: Pt = [lerp(lDown[0], lUp[0], up), lerp(lDown[1], lUp[1], up)];
-		const le: Pt = [lerp(i.mixing ? cx - 28 : cx - 29, cx - 29, up), lerp(128, 94, up)];
-		tube(g, cx - 17, sy, le[0], le[1], 3);
-		tube(g, le[0], le[1], lh[0], lh[1] + (up > 0.5 ? 3 : -1), 2.6);
-		cuff(
-			g,
-			lerp(le[0], lh[0], 0.78),
-			lerp(le[1], lh[1], 0.78) + (up > 0.5 ? 2 : -1),
-			i.accent,
-			E.hats
-		);
-		hand(g, lh[0], lh[1], up > 0.5 ? 'point' : 'flat', led);
+		const bands = [i.accent, PINK];
+		[pose.left, pose.right].forEach((target, n) => {
+			const side = n ? 1 : -1;
+			const [sx, sy] = SHOULDERS[n];
+			const { hand: h, elbow: e } = this.arms[n];
+			const raised = h[1] < sy;
+			tube(g, sx + pose.sway, sy + tb, e[0], e[1], 3);
+			tube(g, e[0], e[1], h[0], h[1] + (raised ? 3 : -1), 2.6);
+			cuff(
+				g,
+				e[0] + (h[0] - e[0]) * 0.78,
+				e[1] + (h[1] - e[1]) * 0.78 + (raised ? 2 : -1),
+				bands[n],
+				E.hats
+			);
+			hand(g, h[0], h[1], target.pose, led, side as -1 | 1);
+		});
 	}
 
 	/** The robot's face: an EQ by default, expressions for the big moments. */
@@ -924,7 +918,8 @@ export class ClubScene {
 				const lit = on && (k + Math.floor(beat * 4)) % 16 < 3;
 				px(g, jx + Math.cos(a) * 9, JOG_Y + Math.sin(a) * 3, 1, 1, lit ? i.accent : '#2e2a42');
 			}
-			const a = loaded ? spin * (d ? 1.01 : 1) : 0;
+			// Deck B's platter follows the robot's hand when he scratches.
+			const a = loaded ? spin * (d ? 1.01 : 1) + (d ? (this.pose?.scratch ?? 0) : 0) : 0;
 			px(g, jx + Math.cos(a) * 6, JOG_Y + Math.sin(a) * 2, 1, 1, '#ece8ff');
 			// Waveform scrolling across the screen.
 			for (let k = 0; k < 9; k++) {

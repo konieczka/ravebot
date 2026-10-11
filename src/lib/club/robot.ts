@@ -4,6 +4,7 @@
  * dithering, then outlined); the arms are shaded every frame because they move.
  */
 
+import type { HandPose } from './moves.js';
 import { OUTLINE, clamp, light, norm, set, sprite, tone } from './sprite.js';
 
 type Ctx = CanvasRenderingContext2D;
@@ -263,8 +264,11 @@ export function tube(
 		}
 }
 
-/** A gloved hand. `pose` = flat on a deck, a fist, or pointing at the roof. */
-export function hand(g: Ctx, x: number, y: number, pose: 'flat' | 'fist' | 'point', led: string) {
+/**
+ * A gloved hand: flat on a deck, a fist, pointing at the roof, pointing sideways (`dir` -1 = left)
+ * at the crowd, or an open palm with spread fingers.
+ */
+export function hand(g: Ctx, x: number, y: number, pose: HandPose, led: string, dir: -1 | 1 = -1) {
 	x = Math.round(x);
 	y = Math.round(y);
 	if (pose === 'point') {
@@ -272,6 +276,17 @@ export function hand(g: Ctx, x: number, y: number, pose: 'flat' | 'fist' | 'poin
 		g.fillStyle = led;
 		g.fillRect(x, y - 7, 1, 1);
 	}
+	if (pose === 'pointSide') {
+		tube(g, x, y, x + dir * 6, y, 1.1, GLOVE);
+		g.fillStyle = led;
+		g.fillRect(x + dir * 7, y, 1, 1);
+	}
+	if (pose === 'open')
+		for (const k of [-2, 0, 2]) {
+			tube(g, x + k * 0.6, y - 1, x + k * 1.2, y - 5 + Math.abs(k) * 0.5, 0.8, GLOVE);
+			g.fillStyle = led;
+			g.fillRect(Math.round(x + k * 1.2), Math.round(y - 6 + Math.abs(k) * 0.5), 1, 1);
+		}
 	const [rx, ry] = pose === 'flat' ? [3.2, 2] : [2.6, 2.6];
 	for (let dy = -4; dy <= 4; dy++)
 		for (let dx = -5; dx <= 5; dx++) {
