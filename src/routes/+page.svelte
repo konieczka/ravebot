@@ -55,7 +55,7 @@
 	</div>
 
 	<footer>
-		Built with Strudel (AGPL-3.0). Audio starts after you click — turn it up.<br />
+		Built with Strudel (AGPL-3.0) and SvelteKit.<br />
 		Made by <a href="https://konieczka.dev">konieczka.dev</a>
 	</footer>
 </main>
