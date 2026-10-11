@@ -208,12 +208,9 @@
 	.rail {
 		display: flex;
 		align-items: stretch;
-		overflow-x: auto;
-		padding-bottom: 6px;
-		scrollbar-color: var(--panel-hi) transparent;
 	}
 	.link {
-		flex: 0 0 34px;
+		flex: 0 0 28px;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -231,7 +228,7 @@
 		background: repeating-linear-gradient(90deg, var(--muted) 0 3px, transparent 3px 6px);
 	}
 	.card {
-		flex: 0 0 240px;
+		flex: 1 1 0;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
@@ -242,7 +239,7 @@
 		box-shadow: inset 0 3px 0 var(--panel-hi);
 	}
 	.card.now {
-		flex-basis: 360px;
+		flex-grow: 1.5;
 		border-color: color-mix(in srgb, var(--accent) 60%, var(--edge));
 	}
 	.card.cold {
@@ -417,6 +414,22 @@
 	.acts button:focus-visible {
 		outline: 2px solid var(--accent);
 		outline-offset: 2px;
+	}
+	@media (max-width: 720px) {
+		.rail {
+			flex-direction: column;
+		}
+		.link {
+			flex-basis: 20px;
+		}
+		.link b {
+			width: 3px;
+			height: 100%;
+			background: repeating-linear-gradient(180deg, var(--muted) 0 3px, transparent 3px 6px);
+		}
+		.card {
+			flex: none;
+		}
 	}
 	.cursor {
 		animation: blink 1s steps(1) infinite;
