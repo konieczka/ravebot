@@ -16,7 +16,11 @@ Mini-notation (inside single-quoted strings):
 
 Sound sources:
   Drums ALWAYS need a bank:  s('bd*4').bank('RolandTR909')
-     banks: RolandTR909, RolandTR808, RolandTR707, RolandTR606 (nothing else)
+     banks (nothing else; each bank only has the drums listed):
+       RolandTR909: bd sd hh oh cp rim lt mt ht cr rd
+       RolandTR808: bd sd hh oh cp rim lt mt ht cr sh cb
+       RolandTR707: bd sd hh oh cp rim lt mt ht cr cb
+       RolandTR606: bd sd hh oh lt ht cr
      drum names: bd (kick) sd (snare) hh (closed hat) oh (open hat) cp (clap) rim lt mt ht (toms) cr rd
   Synths NEVER use a bank:   note('c2 eb2 g2').s('sawtooth')
      synth names: sawtooth square triangle sine supersaw (nothing else)

@@ -131,7 +131,14 @@ function check(node: Node, scope: Set<string>, depth: number): void {
 	}
 }
 
-export const BANKS = ['RolandTR909', 'RolandTR808', 'RolandTR707', 'RolandTR606'];
+/** Drum sounds each bank actually ships in the tidal-drum-machines sample map. */
+export const BANK_SOUNDS: Record<string, string[]> = {
+	RolandTR909: ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht', 'cr', 'rd'],
+	RolandTR808: ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht', 'cr', 'sh', 'cb', 'perc'],
+	RolandTR707: ['bd', 'sd', 'hh', 'oh', 'cp', 'rim', 'lt', 'mt', 'ht', 'cr', 'cb'],
+	RolandTR606: ['bd', 'sd', 'hh', 'oh', 'lt', 'ht', 'cr']
+};
+const BANKS = Object.keys(BANK_SOUNDS);
 const DRUMS = new Set([
 	'bd',
 	'sd',
@@ -215,6 +222,17 @@ function repairLiterals(src: string, expr: Node): string {
 	return src;
 }
 
+/** Mini-notation slips that Strudel's parser rejects or silently mis-reads. */
+function lintMini(mini: string): void {
+	if (!balanced(mini)) throw new ValidationError(`unbalanced brackets in '${mini}'`);
+	if (/[a-z0-9]~|~[a-z0-9]/i.test(mini))
+		throw new ValidationError(`'~' is a rest and needs spaces around it: '${mini}'`);
+	if (/[a-z0-9]\[/i.test(mini))
+		throw new ValidationError(`put a space before '[' (e.g. 'cp [~ cp]'): '${mini}'`);
+	if (/[a-z]\(\s*\d+\s*\)/i.test(mini))
+		throw new ValidationError(`euclid needs two numbers, e.g. 'oh(3,8)': '${mini}'`);
+}
+
 /**
  * Musical lint on an already-safe AST: catches sounds and banks that do not exist, drums in the
  * wrong layer and broken mini-notation brackets. These are the mistakes small models make most.
@@ -223,16 +241,11 @@ function lint(expr: Node, role: LayerName): void {
 	const sounds: string[] = [];
 	const banks: string[] = [];
 	let hasNotes = false;
+	let usesN = false;
+	let usesScale = false;
 	const visit = (node: any): void => {
 		if (!node || typeof node.type !== 'string') return;
-		if (node.type === 'Literal' && typeof node.value === 'string' && !balanced(node.value))
-			throw new ValidationError(`unbalanced brackets in '${node.value}'`);
-		if (
-			node.type === 'Literal' &&
-			typeof node.value === 'string' &&
-			/[a-z0-9]~|~[a-z0-9]/i.test(node.value)
-		)
-			throw new ValidationError(`'~' is a rest and needs spaces around it: '${node.value}'`);
+		if (node.type === 'Literal' && typeof node.value === 'string') lintMini(node.value);
 		if (node.type === 'CallExpression') {
 			const callee = node.callee;
 			if (callee.type === 'Identifier' && SIGNALS.has(callee.name))
@@ -242,8 +255,16 @@ function lint(expr: Node, role: LayerName): void {
 			const name = callee.type === 'Identifier' ? callee.name : callee.property?.name;
 			const arg = node.arguments[0];
 			const str = arg?.type === 'Literal' && typeof arg.value === 'string' ? arg.value : null;
-			if ((name === 's' || name === 'sound') && str !== null) sounds.push(...soundNames(str));
+			if ((name === 's' || name === 'sound') && str !== null) {
+				if (/(^|[\s,[<])\d+(?=[\s,\]>]|$)/.test(str.replace(/\([^)]*\)/g, '')))
+					throw new ValidationError(
+						`numbers are not sounds: '${str}' (use 'bd:2' for a sample variant)`
+					);
+				sounds.push(...soundNames(str));
+			}
 			if (name === 'note' || name === 'n') hasNotes = true;
+			if (name === 'n') usesN = true;
+			if (name === 'scale') usesScale = true;
 			if (name === 'bank') {
 				if (str === null || !BANKS.includes(str))
 					throw new ValidationError(
@@ -260,6 +281,10 @@ function lint(expr: Node, role: LayerName): void {
 	};
 	visit(expr);
 
+	if (usesScale && !usesN)
+		throw new ValidationError(
+			".scale() works with scale degrees: n('0 2 4').scale('C:minor'), not note()"
+		);
 	if (!sounds.length && !hasNotes)
 		throw new ValidationError('layer has no sound: start from s(...), note(...) or n(...)');
 	for (const name of new Set(sounds)) {
@@ -267,6 +292,15 @@ function lint(expr: Node, role: LayerName): void {
 			throw new ValidationError(`unknown sound "${name}"`);
 		if (!ROLE_SOUNDS[role](name))
 			throw new ValidationError(`"${name}" does not belong in the ${role} layer`);
+	}
+	for (const bank of new Set(banks)) {
+		const missing = [...new Set(sounds)].filter(
+			(n) => DRUMS.has(n) && !BANK_SOUNDS[bank].includes(n)
+		);
+		if (missing.length)
+			throw new ValidationError(
+				`${bank} has no ${missing.join('/')}; it only has ${BANK_SOUNDS[bank].join(' ')}`
+			);
 	}
 	if (sounds.some((n) => DRUMS.has(n)) && !banks.length)
 		throw new ValidationError(`drum sounds need .bank(...), e.g. .bank('RolandTR909')`);

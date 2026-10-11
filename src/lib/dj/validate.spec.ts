@@ -73,6 +73,15 @@ describe('musical lint', () => {
 		["note('c2 eb2').sawtooth.lpf(300)", 'bass', /".sawtooth" must be a method call/],
 		['sine.range(300,2600).slow(16).gain(.35)', 'synth', /layer has no sound/],
 		["s('cp~ cp cp ~').bank('RolandTR909')", 'perc', /needs spaces/],
+		[
+			"s('cp[2 4], rim(5,8)').bank('RolandTR909')",
+			'perc',
+			/space before '\['|numbers are not sounds/
+		],
+		["s('hh(7,16) oh(8)').bank('RolandTR909')", 'hats', /euclid needs two numbers/],
+		["s('cp 2 cp 4, rim(7,16)').bank('RolandTR909')", 'perc', /numbers are not sounds/],
+		["s('rim(3,8) ~').bank('RolandTR606')", 'perc', /RolandTR606 has no rim/],
+		["note('g1').scale('Bdim7').s('square')", 'bass', /scale\(\) works with scale degrees/],
 		["s('white*16').hpf(saw(3000,9000))", 'synth', /saw is a signal/]
 	] as const)('rejects %s in %s', (code, role, msg) => {
 		expect(() => validateLayer(code, role)).toThrow(msg);

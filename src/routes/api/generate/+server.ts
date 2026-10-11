@@ -25,8 +25,15 @@ const MAX_COPIED_LAYERS = 2;
 const SEED_LAYERS = new Set(GENRES.flatMap((g) => g.seeds.flatMap((s) => Object.values(s.layers))));
 const SEED_TITLES = new Set(GENRES.flatMap((g) => g.seeds.map((s) => s.title.toLowerCase())));
 
-/** Some providers reject `response_format`; remember that and stop sending it. */
-let schemaSupported = true;
+/** Optional request fields; a provider that rejects one gets it dropped for the rest of the session. */
+const OPTIONAL_PARAMS = {
+	// Constrained decoding guarantees the reply shape.
+	response_format: { type: 'json_schema', json_schema: { name: 'track', schema: TRACK_SCHEMA } },
+	// Reasoning models (e.g. GLM) otherwise spend thousands of tokens thinking before the JSON.
+	// Non-reasoning models ignore it.
+	reasoning_effort: 'low'
+};
+const unsupported = new Set<string>();
 
 type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
@@ -84,11 +91,8 @@ async function chat(messages: ChatMessage[], temperature: number): Promise<strin
 		// A track is ~200 tokens; a low cap makes repetition loops fail fast instead of burning 1k tokens.
 		max_tokens: 600
 	};
-	if (schemaSupported)
-		body.response_format = {
-			type: 'json_schema',
-			json_schema: { name: 'track', schema: TRACK_SCHEMA }
-		};
+	for (const [key, value] of Object.entries(OPTIONAL_PARAMS))
+		if (!unsupported.has(key)) body[key] = value;
 
 	const res = await fetch(url, {
 		method: 'POST',
@@ -98,18 +102,32 @@ async function chat(messages: ChatMessage[], temperature: number): Promise<strin
 	});
 	if (!res.ok) {
 		const text = (await res.text()).slice(0, 300);
-		if (schemaSupported && res.status === 400 && /response_format|json_schema/i.test(text)) {
-			schemaSupported = false;
+		const rejected = Object.keys(OPTIONAL_PARAMS).find(
+			(key) => !unsupported.has(key) && text.includes(key)
+		);
+		if (res.status === 400 && rejected) {
+			unsupported.add(rejected);
 			return chat(messages, temperature);
 		}
 		throw new Error(`gateway ${res.status}: ${text}`);
 	}
 	const data: any = await res.json();
 	const choice = data?.choices?.[0];
-	const content = choice?.message?.content;
-	if (typeof content !== 'string') throw new Error('gateway returned no message content');
-	if (choice.finish_reason === 'length')
-		throw new Error('reply cut off (model got stuck repeating itself)');
+	if (choice?.finish_reason === 'length') {
+		const thinking = choice.message?.reasoning_content || choice.message?.reasoning;
+		throw new Error(
+			thinking && !choice.message?.content
+				? 'reply cut off (reasoning model used its token budget thinking)'
+				: 'reply cut off (model got stuck repeating itself)'
+		);
+	}
+	let content = choice?.message?.content;
+	// In JSON-schema mode some Workers AI models (e.g. Qwen) return the parsed object, not a string.
+	if (content && typeof content === 'object') content = JSON.stringify(content);
+	if (typeof content !== 'string') {
+		console.error('[generate] unexpected gateway response:', JSON.stringify(data).slice(0, 800));
+		throw new Error('gateway returned no message content');
+	}
 	return content;
 }
 
