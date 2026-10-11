@@ -25,6 +25,7 @@ import {
 } from './draw.js';
 import { text, textC } from './font.js';
 import { Crowd } from './crowd.js';
+import { Lights, type LightFrame } from './lights.js';
 import { SHOULDERS, choreograph, type Pose } from './moves.js';
 import { HEAD, TORSO, cuff, hand, headSprite, neck, torsoSprite, tube } from './robot.js';
 
@@ -399,23 +400,6 @@ function buildFog() {
 	return c;
 }
 
-interface Emitter {
-	x: number;
-	y: number;
-	a: number;
-	s: number;
-	c: number;
-}
-const EMITTERS: Emitter[] = [
-	{ x: 0, y: 150, a: -0.1 * Math.PI, s: 0.07, c: 0 },
-	{ x: 480, y: 150, a: -0.9 * Math.PI, s: 0.07, c: 1 },
-	{ x: 98, y: 16, a: 0.28 * Math.PI, s: 0.14, c: 2 },
-	{ x: 382, y: 16, a: 0.72 * Math.PI, s: 0.14, c: 0 },
-	{ x: 146, y: 138, a: -0.72 * Math.PI, s: 0.12, c: 1 },
-	{ x: 334, y: 138, a: -0.28 * Math.PI, s: 0.12, c: 2 },
-	{ x: 240, y: 12, a: 0.5 * Math.PI, s: 0.38, c: 2 }
-];
-
 interface Confetto {
 	x: number;
 	y: number;
@@ -436,6 +420,8 @@ interface Frame {
 	brk: number;
 	/** Seconds since the last frame. */
 	dt: number;
+	/** What the light show reads. */
+	lf: LightFrame;
 }
 
 export class ClubScene {
@@ -449,6 +435,9 @@ export class ClubScene {
 	private blackout = 0;
 	private frame = windowFrame();
 	private fog = buildFog();
+	private lights = new Lights();
+	/** A quarter-size copy of the frame, for the bloom. */
+	private glowBuf = canvas(W / 4, Math.ceil(H / 4));
 	private crowd = new Crowd(W, H);
 	private balconies: { x: number; hand: number; ph: number }[][][];
 	private sparks: { lon: number; y: number; c: number }[];
@@ -530,11 +519,34 @@ export class ClubScene {
 			vox: sm.vox * (i.cycle % 8 < 4 ? 1 : 0.55)
 		};
 		const hype = i.live ? i.intensity * (0.45 + (i.energy / 10) * 0.55) : 0.1;
-		const f: Frame = { i, kind, E, hype, beat, ph, brk: kind === 'breakdown' ? 1 : 0, dt };
+		const lf: LightFrame = {
+			live: i.live,
+			gap: i.gap,
+			kind,
+			x: i.x,
+			cycle: i.cycle,
+			beat,
+			ph,
+			E,
+			sm,
+			hype,
+			intensity: i.intensity,
+			accent: i.accent,
+			t: this.t,
+			dt,
+			reducedMotion: i.reducedMotion
+		};
+		const f: Frame = { i, kind, E, hype, beat, ph, brk: kind === 'breakdown' ? 1 : 0, dt, lf };
+		this.lights.update(lf);
 
 		const g = this.g;
 		g.globalCompositeOperation = 'source-over';
 		g.globalAlpha = 1;
+		// The whole picture shakes on the kick when the energy is up; the edges it uncovers stay dark.
+		const [sx, sy] = this.shake(f);
+		g.setTransform(1, 0, 0, 1, 0, 0);
+		if (sx || sy) px(g, 0, 0, W, H, '#05030a');
+		g.setTransform(1, 0, 0, 1, sx, sy);
 		g.drawImage(this.bg, 0, 0);
 		this.town.live(g, this.t, i.cycle, i.live);
 		g.drawImage(this.frame, 0, 0);
@@ -555,13 +567,55 @@ export class ClubScene {
 		g.drawImage(this.booth, 0, 0);
 		this.boothLive(f);
 		this.robot(f, 'arms');
-		this.lasers(f);
+		this.lights.beams(g, lf);
+		this.lights.lasers(g, lf);
 		this.additive(() => {
 			g.globalAlpha = i.live ? 0.05 + 0.06 * E.bass + 0.08 * f.brk : 0.03;
 			g.drawImage(this.fog, -(W - ((this.t * 8) % W)), 160);
 		});
 		this.dancefloor(f);
+		this.lights.pools(g, lf);
+		g.setTransform(1, 0, 0, 1, 0, 0);
+		this.bloom(f);
 		this.effects(f);
+	}
+
+	/** How far the picture is knocked this frame, in whole pixels. */
+	private shake({ i, kind, E, hype, beat, ph }: Frame): [number, number] {
+		if (i.reducedMotion || !i.live || i.gap || kind === 'breakdown') return [0, 0];
+		const bar = i.x * 32;
+		// The kick knocks the picture down a pixel or two once the energy and the track are up.
+		let amp = clamp((hype - 0.35) / 0.55, 0, 1) * 1.8 * E.kick;
+		// The drop lands hard: every beat of its first two bars.
+		if (kind === 'peak' && bar < 2) amp += 2.6 * Math.exp(-ph * 6);
+		let dx = (hash(Math.floor(beat * 8), 1) - 0.5) * amp * 0.9;
+		let dy = amp;
+		// The end of the build rumbles, a little more every bar.
+		if (kind === 'build' && bar > 24) {
+			const r = ((bar - 24) / 8) * 1.4;
+			dx += (Math.random() - 0.5) * 2 * r;
+			dy += (Math.random() - 0.5) * 2 * r;
+		}
+		return [Math.round(dx), Math.round(dy)];
+	}
+
+	/** A soft glow round everything bright: the frame, shrunk, squared and laid back over itself. */
+	private bloom({ i, hype }: Frame) {
+		const [c, s] = this.glowBuf;
+		s.globalCompositeOperation = 'copy';
+		s.imageSmoothingEnabled = true;
+		s.imageSmoothingQuality = 'high';
+		s.drawImage(this.cv, 0, 0, c.width, c.height);
+		// Squaring keeps the lights and drops the dim walls.
+		s.globalCompositeOperation = 'multiply';
+		s.drawImage(c, 0, 0);
+		const g = this.g;
+		g.save();
+		g.imageSmoothingEnabled = true;
+		g.globalCompositeOperation = 'lighter';
+		g.globalAlpha = i.live ? 0.35 + 0.35 * hype : 0.25;
+		g.drawImage(c, 0, 0, W, H);
+		g.restore();
 	}
 
 	private drop(i: SceneInput) {
@@ -586,40 +640,14 @@ export class ClubScene {
 		this.g.globalCompositeOperation = 'source-over';
 	}
 
-	/** Window wash, TV tower light, truss fixtures and their beams. */
-	private room({ i, E, brk }: Frame) {
+	/** Window wash, the fixtures on the truss and its LED bar. */
+	private room({ i, E, brk, lf }: Frame) {
 		const g = this.g;
 		this.additive(() => {
 			g.fillStyle = rgba(brk ? '#4d8bff' : i.accent, 0.05 + 0.12 * E.synth + 0.1 * brk);
 			g.fillRect(WIN.x, WIN.y, WIN.w, WIN.h);
 		});
-		this.additive(() => {
-			for (let k = 0; k < 8; k++) {
-				const x = 132 + k * 31;
-				const a = Math.PI / 2 + Math.sin(this.t * 0.6 + k) * 0.35;
-				const col = k % 2 ? PINK : brk ? '#4d8bff' : i.accent;
-				g.fillStyle = rgba(col, (0.03 + 0.06 * E.synth + 0.05 * brk) * (i.live ? 1 : 0.2));
-				g.beginPath();
-				g.moveTo(x, 20);
-				g.lineTo(x + Math.cos(a - 0.12) * 200, 20 + Math.sin(a - 0.12) * 200);
-				g.lineTo(x + Math.cos(a + 0.12) * 200, 20 + Math.sin(a + 0.12) * 200);
-				g.closePath();
-				g.fill();
-			}
-		});
-		// Moving heads: a yoke under the truss, the head tilting with its beam.
-		for (let k = 0; k < 8; k++) {
-			const x = 132 + k * 31;
-			const a = Math.PI / 2 + Math.sin(this.t * 0.6 + k) * 0.35;
-			px(g, x - 3, 18, 7, 1, '#2a2438');
-			px(g, x - 3, 18, 1, 4, '#2a2438');
-			px(g, x + 3, 18, 1, 4, '#2a2438');
-			disc(g, x, 21, 2, '#1a1626');
-			px(g, x - 1, 19, 1, 1, '#3a3550');
-			const lx = x + Math.round(Math.cos(a) * 2);
-			const ly = 21 + Math.round(Math.sin(a) * 2);
-			px(g, lx, ly, 1, 1, rgba(k % 2 ? PINK : i.accent, 0.4 + 0.6 * E.kick));
-		}
+		this.lights.fixtures(g, lf);
 		// LED pixel bar along the bottom chord, chasing on the beat.
 		const step = Math.floor(i.cycle * 8);
 		for (let x = 94; x < 386; x += 2) {
@@ -1033,53 +1061,6 @@ export class ClubScene {
 		if (kind === 'build' && i.x > 0.5)
 			return 0.22 * Math.exp(-((beat * (i.x > 0.8 ? 4 : 2)) % 1) * 12);
 		return 0;
-	}
-
-	/** Lasers belong to the synth: off without it, slow and blue in the breakdown, a full fan at the peak. */
-	private lasers({ i, E, kind }: Frame) {
-		if (!i.live || i.gap || E.synth < 0.05) return;
-		const g = this.g;
-		const cols = [PINK, '#4d8bff', i.accent];
-		let list = EMITTERS.slice(0, 4);
-		let fan = 1;
-		let speed = 0.5;
-		if (kind === 'breakdown') {
-			list = EMITTERS.slice(0, 2);
-			speed = 0.2;
-		} else if (kind === 'build') {
-			list = EMITTERS.slice(2, 6);
-			speed = 0.5 + i.x * 3;
-		} else if (kind === 'peak' || (kind === 'main' && i.intensity > 0.7)) {
-			list = EMITTERS;
-			fan = kind === 'peak' ? 3 : 2;
-			speed = 0.7;
-		}
-		this.additive(() => {
-			list.forEach((e, ei) => {
-				for (let j = 0; j < fan; j++) {
-					let a =
-						e.a +
-						Math.sin(this.t * speed * (1 + ei * 0.13) + ei * 1.7) * e.s * Math.PI +
-						(j - (fan - 1) / 2) * 0.09;
-					if (kind === 'build') a = lerp(a, Math.atan2(150 - e.y, 240 - e.x), i.x * 0.7);
-					const c = kind === 'breakdown' ? '#4d8bff' : cols[(e.c + j) % 3];
-					const al = E.synth * (kind === 'breakdown' ? 0.45 : 0.8);
-					const x1 = e.x + Math.cos(a) * 700;
-					const y1 = e.y + Math.sin(a) * 700;
-					for (const [w, k] of [
-						[3, 0.18],
-						[1, 1]
-					]) {
-						g.strokeStyle = rgba(c, al * k);
-						g.lineWidth = w;
-						g.beginPath();
-						g.moveTo(e.x, e.y);
-						g.lineTo(x1, y1);
-						g.stroke();
-					}
-				}
-			});
-		});
 	}
 
 	private dancefloor({ i, E, hype, ph, beat, kind, dt }: Frame) {
