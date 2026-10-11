@@ -1,29 +1,22 @@
-import { CRATE_TITLES } from './crate-titles';
+import { CRATE_NAMES, type CrateName } from './crate-names';
 import { GENRES, genreById } from './genres';
 import { LAYERS, type GenreId, type LayerName, type Layers, type Track } from './types';
 
 const pick = <T>(xs: readonly T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
-const SHOUTS = [
-	'Backup routine engaged. Still bangs.',
-	'Brain offline, hands on the faders.',
-	'Running on pure muscle memory!',
-	'Recycling the classics, beep boop.'
-];
+/** Crate names already played this session, so a remix name does not come back until its genre runs out. */
+const usedNames = new Set<CrateName>();
 
-/** Crate titles already played this session, so a remix name does not come back until its genre runs out. */
-const usedTitles = new Set<string>();
-
-function crateTitle(genre: GenreId): string {
-	const titles = CRATE_TITLES[genre];
-	let fresh = titles.filter((t) => !usedTitles.has(t));
+function crateName(genre: GenreId): CrateName {
+	const names = CRATE_NAMES[genre];
+	let fresh = names.filter((n) => !usedNames.has(n));
 	if (!fresh.length) {
-		for (const t of titles) usedTitles.delete(t);
-		fresh = titles;
+		for (const n of names) usedNames.delete(n);
+		fresh = names;
 	}
-	const title = pick(fresh);
-	usedTitles.add(title);
-	return title;
+	const name = pick(fresh);
+	usedNames.add(name);
+	return name;
 }
 
 /** Layers that carry pitch: they always come from the same seed so the key stays consistent. */
@@ -53,10 +46,11 @@ export function fallbackTrack(genre: GenreId, previous?: Layers): Track {
 			candidate = pick(pool).layers[layer];
 		layers[layer] = candidate;
 	}
+	const { title, comment } = crateName(genre);
 	return {
 		id: crypto.randomUUID(),
-		title: crateTitle(genre),
-		comment: pick(SHOUTS),
+		title,
+		comment,
 		genre,
 		layers,
 		source: 'fallback'
