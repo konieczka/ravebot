@@ -65,7 +65,8 @@ const DEFAULT_LAYERS: Layers = {
 	hats: 'silence',
 	perc: 'silence',
 	bass: 'silence',
-	synth: 'silence'
+	synth: 'silence',
+	vox: 'silence'
 };
 
 /** Non-kick layers that are verbatim copies of a seed track or of the previous track. */
@@ -88,8 +89,8 @@ async function chat(messages: ChatMessage[], temperature: number): Promise<strin
 		model: LLM_MODEL,
 		messages,
 		temperature,
-		// A track is ~200 tokens; a low cap makes repetition loops fail fast instead of burning 1k tokens.
-		max_tokens: 600
+		// A track is ~350 tokens; a low cap makes repetition loops fail fast instead of burning 2k tokens.
+		max_tokens: 900
 	};
 	for (const [key, value] of Object.entries(OPTIONAL_PARAMS))
 		if (!unsupported.has(key)) body[key] = value;

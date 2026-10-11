@@ -8,6 +8,8 @@ import { LAYERS, type Layers } from '#lib/dj/types.js';
 
 const DRUM_MACHINES =
 	'https://raw.githubusercontent.com/felixroos/dough-samples/main/tidal-drum-machines.json';
+/** Dirt-Samples: the vocals, stabs and FX of the vox layer. Optional; drums work without it. */
+const DIRT_SAMPLES = 'github:tidalcycles/dirt-samples';
 
 let repl: StrudelRepl | null = null;
 let web: typeof import('@strudel/web') | null = null;
@@ -17,10 +19,46 @@ export async function initEngine(): Promise<void> {
 	if (repl) return;
 	web = await import('@strudel/web');
 	repl = await web.initStrudel({
-		prebake: () => web!.samples(DRUM_MACHINES),
+		prebake: () =>
+			Promise.all([
+				web!.samples(DRUM_MACHINES),
+				web!.samples(DIRT_SAMPLES).catch((e: Error) => console.warn('vox samples:', e))
+			]),
 		onEvalError: (err) => (lastEvalError = err)
 	});
 	await web.getAudioContext().resume();
+	// Strudel loads its AudioWorklets (djf, shape, crush, ...) on the first mousedown *after*
+	// init, but we are already inside the click that started us. Trigger it now and wait, or
+	// every event using a worklet effect fails until the user clicks again.
+	const ready = web.initAudioOnFirstClick();
+	document.dispatchEvent(new MouseEvent('mousedown'));
+	await ready;
+	// Layers may read `arc` (track intensity). The mixer binds it per deck; this stand-in lets
+	// a single layer compile on its own for the dry run.
+	(globalThis as any).arc = web.signal(() => 0.6);
+	// The mixer's build-up tools (rolls, impact) are not part of any track's dry run.
+	await Promise.allSettled(FX_SOUNDS.map((name) => preload(name, {})));
+}
+
+/** Drums the mixer adds for build-ups and drops (see buildProgram). */
+const FX_SOUNDS = [
+	'RolandTR909_cr',
+	'RolandTR808_bd',
+	'RolandTR909_sd',
+	'RolandTR909_cp',
+	'RolandTR909_rim',
+	'RolandTR909_mt',
+	'RolandTR808_cp'
+];
+
+/**
+ * Strudel fetches samples on their first trigger and skips that hit if it arrives late, which
+ * would swallow a track's first vocal shot or the first drop's impact. Load them up front.
+ * Resolves to null for synths and unknown sounds.
+ */
+function preload(name: string, value: Record<string, unknown>): Promise<unknown> | null {
+	const sound = web!.getSound(name) as { data?: { samples?: unknown } } | undefined;
+	return sound?.data?.samples ? web!.getSampleBuffer(value, sound.data.samples) : null;
 }
 
 /** Plays `code`, replacing whatever runs now. The clock keeps going, so the swap is beat-aligned. */
@@ -59,11 +97,13 @@ async function compile(code: string): Promise<Pattern> {
 /**
  * Compiles each layer and queries 16 bars without playing them. Catches runtime errors
  * (unknown methods, bad mini-notation), empty patterns and sounds that do not exist.
- * Returns a map of layer -> problem; empty when the track is safe to mix in.
+ * Also preloads the track's samples. Returns a map of layer -> problem; empty when the track
+ * is safe to mix in.
  */
 export async function dryRun(layers: Layers): Promise<Partial<Record<keyof Layers, string>>> {
 	if (!web) throw new Error('engine not initialised');
 	const problems: Partial<Record<keyof Layers, string>> = {};
+	const loads = new Map<string, Promise<unknown> | null>();
 	for (const layer of LAYERS) {
 		const code = layers[layer];
 		if (code === 'silence') continue;
@@ -84,10 +124,13 @@ export async function dryRun(layers: Layers): Promise<Partial<Record<keyof Layer
 				if (!s) throw new Error('event has no sound');
 				const name = typeof value.bank === 'string' ? `${value.bank}_${s}` : s;
 				if (!web.getSound(name)) throw new Error(`unknown sound "${name}"`);
+				const key = `${name}:${value.n ?? 0}`;
+				if (!loads.has(key)) loads.set(key, preload(name, value));
 			}
 		} catch (e) {
 			problems[layer] = (e as Error).message;
 		}
 	}
+	await Promise.allSettled(loads.values());
 	return problems;
 }

@@ -1,6 +1,7 @@
 import { browser } from '$app/env';
 import * as engine from '#lib/engine/strudel.js';
-import { GAIN_FN, Mixer, buildProgram, type Deck } from '#lib/engine/mixer.js';
+import { MIXER_GLOBAL, Mixer, buildProgram, type Deck } from '#lib/engine/mixer.js';
+import { TRACK_BARS, TRANSITION_BARS } from './arrangement.js';
 import { fallbackTrack } from './fallback.js';
 import { genreById } from './genres.js';
 import {
@@ -13,9 +14,7 @@ import {
 } from './types.js';
 import { validateLayers } from './validate.js';
 
-const TRANSITION_BARS = 16;
 const SKIP_TRANSITION_BARS = 8;
-const OPENING_BARS = 32;
 const TICK_MS = 200;
 /** Max BPM change per tick while gliding to a new tempo (~0.4 BPM/s). */
 const BPM_STEP = 0.08;
@@ -42,7 +41,6 @@ export class DjBrain {
 	targetBpm = $state(128);
 	energy = $state(6);
 	weirdness = $state(3);
-	trackBars = $state(64);
 	vibe = $state('');
 	hold = $state(false);
 	locked = $state<Record<LayerName, boolean>>({
@@ -50,7 +48,8 @@ export class DjBrain {
 		hats: false,
 		perc: false,
 		bass: false,
-		synth: false
+		synth: false,
+		vox: false
 	});
 
 	// Live state
@@ -69,7 +68,6 @@ export class DjBrain {
 
 	mixer = new Mixer();
 	private trackStart = 0;
-	private trackLength = OPENING_BARS;
 	private genStamp = 0;
 	private skipRequested = false;
 	private announced = false;
@@ -89,9 +87,7 @@ export class DjBrain {
 	liveTrack = $derived(this.decks[this.live]);
 
 	constructor() {
-		if (browser)
-			(globalThis as any)[GAIN_FN] = (deck: Deck, layer: LayerName, t: number) =>
-				this.mixer.gain(deck, layer, t);
+		if (browser) (globalThis as any)[MIXER_GLOBAL] = this.mixer;
 	}
 
 	// ── controls ────────────────────────────────────────────────────────────
@@ -118,6 +114,8 @@ export class DjBrain {
 
 	toggleLock(layer: LayerName) {
 		this.locked[layer] = !this.locked[layer];
+		if (this.locked[layer]) this.mixer.pinned.add(layer);
+		else this.mixer.pinned.delete(layer);
 	}
 
 	skip() {
@@ -154,10 +152,13 @@ export class DjBrain {
 			source: 'fallback'
 		};
 		this.mixer.live = this.live = 0;
+		// Seeds are known-good; the dry run here just preloads the opener's samples.
+		await engine.dryRun(opener.layers).catch(() => {});
 		this.mixer.plan = null;
+		this.mixer.timelines = [this.timeline(opener, 0), null];
 		this.decks = [opener, null];
 		try {
-			await engine.play(buildProgram(this.decks));
+			await engine.play(buildProgram(this.decks, this.mixer));
 		} catch (e) {
 			this.status = 'off';
 			this.say(`! could not start: ${(e as Error).message}`, 'err');
@@ -165,7 +166,6 @@ export class DjBrain {
 		}
 		this.status = 'live';
 		this.trackStart = 0;
-		this.trackLength = Math.min(OPENING_BARS, this.trackBars);
 		this.speech = opener.comment;
 		this.say(`> now playing: ${opener.title}`, 'ok');
 		this.timer = setInterval(() => this.tick(), TICK_MS);
@@ -190,6 +190,7 @@ export class DjBrain {
 			cycle: 0
 		});
 		this.mixer.plan = null;
+		this.mixer.timelines = [null, null];
 		this.speech = 'Set over. Thank you, carbon lifeforms.';
 		this.say('> set stopped');
 	}
@@ -223,8 +224,7 @@ export class DjBrain {
 		if (!this.next && !this.generating) void this.generateNext();
 
 		const due =
-			this.skipRequested ||
-			(!this.hold && c >= this.trackStart + this.trackLength - TRANSITION_BARS);
+			this.skipRequested || (!this.hold && c >= this.trackStart + TRACK_BARS - TRANSITION_BARS);
 		if (due && this.next) await this.guard(() => this.beginTransition(c));
 	}
 
@@ -257,13 +257,16 @@ export class DjBrain {
 		const decks: [Track | null, Track | null] = [...this.decks];
 		decks[to] = incoming;
 		this.mixer.plan = { from, to, start, bars, locked };
+		// The incoming track's bar 0 is the middle of the blend, where its kick and bass come in.
+		this.mixer.timelines[to] = this.timeline(incoming, start + bars / 2);
 		try {
-			await engine.play(buildProgram(decks));
+			await engine.play(buildProgram(decks, this.mixer));
 		} catch (e) {
 			// The incoming track blew up inside Strudel: drop it and keep the current one playing.
 			this.mixer.plan = null;
+			this.mixer.timelines[to] = null;
 			this.glitch(`! "${incoming.title}" crashed the decks (${(e as Error).message}). Recovering.`);
-			await engine.play(buildProgram(this.decks)).catch(() => {});
+			await engine.play(buildProgram(this.decks, this.mixer)).catch(() => {});
 			return;
 		}
 		this.decks = decks;
@@ -277,14 +280,14 @@ export class DjBrain {
 		const decks: [Track | null, Track | null] = [...this.decks];
 		decks[plan.from] = null;
 		this.mixer.plan = null;
+		this.mixer.timelines[plan.from] = null;
 		this.mixer.live = plan.to;
 		this.live = plan.to;
 		this.decks = decks;
 		this.transitioning = false;
 		this.trackStart = plan.start + plan.bars / 2;
-		this.trackLength = this.trackBars;
 		await engine
-			.play(buildProgram(decks))
+			.play(buildProgram(decks, this.mixer))
 			.catch((e) => this.glitch(`! re-patch failed: ${e.message}`));
 	}
 
@@ -373,6 +376,10 @@ export class DjBrain {
 	}
 
 	// ── helpers ─────────────────────────────────────────────────────────────
+
+	private timeline(track: Track, origin: number) {
+		return { origin, style: genreById(track.genre).arc };
+	}
 
 	private glitch(text: string) {
 		this.glitchUntil = engine.now() + 2;

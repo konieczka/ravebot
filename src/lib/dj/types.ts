@@ -1,4 +1,4 @@
-export const LAYERS = ['kick', 'hats', 'perc', 'bass', 'synth'] as const;
+export const LAYERS = ['kick', 'hats', 'perc', 'bass', 'synth', 'vox'] as const;
 export type LayerName = (typeof LAYERS)[number];
 export type Layers = Record<LayerName, string>;
 

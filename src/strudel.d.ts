@@ -18,6 +18,9 @@ declare module '@strudel/web' {
 	}): Promise<StrudelRepl>;
 	export function samples(source: string | Record<string, unknown>): Promise<void>;
 	export function getAudioContext(): AudioContext;
+	export function initAudioOnFirstClick(options?: object): Promise<void>;
 	export function getSound(name: string): unknown;
+	export function getSampleBuffer(value: object, samples: unknown): Promise<unknown>;
+	export function signal(fn: (t: number) => number): Pattern;
 	export function transpiler(code: string, options?: object): { output: string };
 }

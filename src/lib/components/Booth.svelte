@@ -10,7 +10,8 @@
 		hats: 'HATS',
 		perc: 'PERC',
 		bass: 'BASS',
-		synth: 'SYNTH'
+		synth: 'SYNTH',
+		vox: 'VOX'
 	} as const;
 	const SEGMENTS = 6;
 
@@ -18,6 +19,10 @@
 	const xfade = $derived(dj.mixer.crossfade(dj.cycle));
 	// A full platter turn every bar keeps the spin locked to the tempo.
 	const spin = $derived((dj.cycle % 1) * 360);
+	// Where the live track is in its arc (groove, breakdown, build, ...).
+	const section = $derived(
+		dj.status === 'live' ? (dj.mixer.position(dj.live, dj.cycle)?.kind ?? '') : ''
+	);
 
 	function level(deck: Deck, layer: (typeof LAYERS)[number]) {
 		const track = dj.decks[deck];
@@ -77,6 +82,9 @@
 			<span>A</span>
 			<div class="track"><div class="knob" style:left="{xfade * 100}%"></div></div>
 			<span>B</span>
+		</div>
+		<div class="section" class:hot={section === 'build' || section === 'peak'}>
+			{section ? section.toUpperCase() : '\u00a0'}
 		</div>
 	</div>
 
@@ -231,6 +239,16 @@
 		background: #c3cae6;
 		border: 2px solid #0d0b1a;
 		transition: left 0.15s linear;
+	}
+	.section {
+		text-align: center;
+		font-family: var(--font-pixel);
+		font-size: 8px;
+		letter-spacing: 2px;
+		color: var(--muted);
+	}
+	.section.hot {
+		color: var(--accent);
 	}
 	@media (max-width: 640px) {
 		.booth {

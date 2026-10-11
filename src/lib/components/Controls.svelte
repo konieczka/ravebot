@@ -77,17 +77,6 @@
 		<input type="range" min="110" max="160" step="1" bind:value={dj.targetBpm} />
 	</label>
 
-	<fieldset>
-		<legend>TRACK LENGTH</legend>
-		<div class="seg">
-			{#each [32, 64, 128] as bars}
-				<button class:on={dj.trackBars === bars} onclick={() => (dj.trackBars = bars)}
-					>{bars} bars</button
-				>
-			{/each}
-		</div>
-	</fieldset>
-
 	<fieldset class="ai-only" disabled={dj.source === 'local'}>
 		<legend>
 			AI SETTINGS

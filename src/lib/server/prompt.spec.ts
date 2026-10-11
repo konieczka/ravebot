@@ -28,7 +28,8 @@ describe('buildMessages', () => {
 					hats: 'silence',
 					perc: 'silence',
 					bass: 'silence',
-					synth: 'silence'
+					synth: 'silence',
+					vox: 'silence'
 				}
 			}
 		});

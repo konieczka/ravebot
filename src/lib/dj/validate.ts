@@ -28,7 +28,9 @@ const GLOBALS = new Set([
 	'rand',
 	'irand',
 	'run',
-	'rev'
+	'rev',
+	// Track intensity 0..1 (bound per deck by the mixer)
+	'arc'
 ]);
 
 /**
@@ -42,7 +44,7 @@ const METHODS = new Set(
 		'decay sustain attack release room size delay delaytime delayfeedback speed legato clip vowel phaser ' +
 		'fast slow rev ply degradeBy sometimesBy sometimes rarely often every firstOf lastOf off jux struct ' +
 		'mask range rangex segment add sub mul late early euclid swingBy chop iter palindrome hurry linger ' +
-		'chunk superimpose layer'
+		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo'
 	).split(' ')
 );
 
@@ -157,6 +159,23 @@ const DRUMS = new Set([
 ]);
 const SYNTHS = new Set(['sawtooth', 'square', 'triangle', 'sine', 'supersaw']);
 const NOISE = new Set(['white', 'pink', 'brown']);
+/** Dirt-Samples one-shots for the vox layer: vocals, rave stabs and FX. Pick variants with 'rave:4'. */
+export const VOX = new Set([
+	'rave',
+	'numbers',
+	'speech',
+	'speakspell',
+	'mouth',
+	'diphone',
+	'hoover',
+	'stab',
+	'space',
+	'wind',
+	'metal',
+	'industrial',
+	'noise2',
+	'bleep'
+]);
 
 /** Which sounds each layer may use, so the mixer's per-layer blends stay meaningful. */
 const ROLE_SOUNDS: Record<LayerName, (name: string) => boolean> = {
@@ -164,14 +183,15 @@ const ROLE_SOUNDS: Record<LayerName, (name: string) => boolean> = {
 	hats: (n) => ['hh', 'oh', 'rd', 'cr', 'sh'].includes(n),
 	perc: (n) => DRUMS.has(n) && n !== 'bd',
 	bass: (n) => SYNTHS.has(n),
-	synth: (n) => SYNTHS.has(n) || NOISE.has(n)
+	synth: (n) => SYNTHS.has(n) || NOISE.has(n),
+	vox: (n) => VOX.has(n) || SYNTHS.has(n) || NOISE.has(n)
 };
 
 /** Sound names referenced by a mini-notation string, e.g. "[~ hh]*4, rim(3,8)" -> hh, rim. */
 const soundNames = (mini: string) =>
 	(mini.replace(/\([^)]*\)/g, ' ').match(/[a-z][a-z0-9]*/gi) ?? []).filter((t) => !/^\d/.test(t));
 
-const SIGNALS = new Set(['sine', 'cosine', 'saw', 'tri', 'square', 'perlin', 'rand']);
+const SIGNALS = new Set(['sine', 'cosine', 'saw', 'tri', 'square', 'perlin', 'rand', 'arc']);
 
 const CLOSER: Record<string, string> = { '[': ']', '<': '>', '(': ')', '{': '}' };
 
@@ -288,7 +308,7 @@ function lint(expr: Node, role: LayerName): void {
 	if (!sounds.length && !hasNotes)
 		throw new ValidationError('layer has no sound: start from s(...), note(...) or n(...)');
 	for (const name of new Set(sounds)) {
-		if (!DRUMS.has(name) && !SYNTHS.has(name) && !NOISE.has(name))
+		if (!DRUMS.has(name) && !SYNTHS.has(name) && !NOISE.has(name) && !VOX.has(name))
 			throw new ValidationError(`unknown sound "${name}"`);
 		if (!ROLE_SOUNDS[role](name))
 			throw new ValidationError(`"${name}" does not belong in the ${role} layer`);
@@ -304,9 +324,9 @@ function lint(expr: Node, role: LayerName): void {
 	}
 	if (sounds.some((n) => DRUMS.has(n)) && !banks.length)
 		throw new ValidationError(`drum sounds need .bank(...), e.g. .bank('RolandTR909')`);
-	if (banks.length && !sounds.some((n) => DRUMS.has(n)))
+	if (banks.length && !sounds.every((n) => DRUMS.has(n)))
 		throw new ValidationError(
-			".bank(...) only works with drum sounds; synths use .s('sawtooth') etc."
+			'.bank(...) only works with drum sounds; synths and vox samples never use a bank'
 		);
 }
 

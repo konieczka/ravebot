@@ -13,6 +13,8 @@ Mini-notation (inside single-quoted strings):
   '<c2 eb2 g1>'  one per bar, alternating   'bd, hh*8' play in parallel
   'rim(3,8)'     euclidean rhythm           'mt(5,16,2)' euclid with rotation
   'hh?'          randomly drop              '[c3,eb3,g3]' chord
+  '{hh ~ oh}%16' polymeter: a 3-step loop on a 16th grid that drifts against the 4/4 kick
+  Bars count from the start of the track, so '<rave:0 ~ ~ ~ ~ ~ ~ ~>' plays on bar 1 of every 8-bar phrase.
 
 Sound sources:
   Drums ALWAYS need a bank:  s('bd*4').bank('RolandTR909')
@@ -26,14 +28,24 @@ Sound sources:
      synth names: sawtooth square triangle sine supersaw (nothing else)
   Scale degrees:             n('0 2 4 7').scale('C:minor').s('triangle')
   Noise (synth layer only):  s('white*16').hpf(5000)   noise names: white pink
+  Vox one-shots (vox layer only, never a bank; pick a variant with ':n'):
+     rave:0 "are you ready"  rave:1 "Babylon"  rave:4 "give it"  rave:5 "our crew"  rave:2 rave:3 shouts
+     numbers:0-8 spoken digits   speech:0-6 short words   speakspell:0-11 robot voice
+     hoover:0-5 rave hoover   stab:0-22 rave chord stabs   space:0-17 sci-fi FX
+     metal:0-9 industrial:0-31 noise2:0-7 metallic hits   wind:0-9 bleep:0-12 mouth:0-14
+  Robot "vocals" from a synth: note('<c4 ~ ~ ~>').s('sawtooth').vowel('<a o>')   vowels: a e i o u
 
 Effects (chain as methods, numbers or patterns):
   .gain(.8) .lpf(800) .lpq(12) .hpf(300) .shape(.4) .distort(.5) .crush(6) .pan(.3)
   .decay(.1).sustain(0) (short plucks)  .attack(.05) .release(.3)
   .room(.4) .delay(.5) .delayfeedback(.5) .speed(2)
 Modulation signals: sine saw tri perlin rand -> .range(lo,hi).slow(8), e.g. .lpf(sine.range(300,2000).slow(8))
+  arc: the track's intensity, 0..1. Climbs through the track, dips in the breakdown, peaks after the drop.
+    Use it so the track grows: .lpf(arc.range(300,3000)) .gain(arc.range(.1,.4)) .degradeBy(arc.range(.6,0))
 Pattern transforms: .fast(2) .slow(2) .rev() .ply(2) .degradeBy(.3) .sometimesBy(.3, x => x.speed(2))
   .every(4, x => x.fast(2)) .off(1/8, x => x.add(note(12))) .jux(rev) .struct('x ~ x x') .mask('<1 [1 0]>')
+  .lastOf(8, x => x.ply(2)) (a fill in the last bar of every 8)   .swingBy(1/6, 8) (16th swing)
+  Filter envelope (acid plucks): .lpf(300).lpenv(4).lpa(.01).lpd(.12).lpq(14)
 Combine: stack(a, b)  cat(a, b)
 
 RULES
@@ -43,7 +55,9 @@ RULES
 - Brackets inside mini-notation must match: '<a b>' and '[a b]' (never '<a b]').
 - '~' is a rest and stands alone: 'cp ~ cp' (never 'cp~').
 - Signals are not functions: saw.range(300,900) (never saw(300,900)). Only use methods listed above.
-- Keep levels sane: kick gain <= 1, hats .2-.6, synth .1-.35. Bass and kick must not fight (bass on off-beats or short notes).
+- Keep levels sane: kick gain <= 1, hats .2-.6, synth .1-.35, vox .3-.7. Bass and kick must not fight (bass on off-beats or short notes).
+- Write every layer as a full-energy loop. The DJ engine arranges the track for you: it brings layers in one by one, strips them for the breakdown, adds snare rolls, risers and the drop. Never try to arrange with long masks.
+- Vox is sparse: one shot every 4-8 bars, with delay/room. Silence most of the time.
 `.trim();
 
 const LAYER_ROLES = `
@@ -53,6 +67,7 @@ Layers (the DJ mixer crossfades each one separately, so every sound must sit in 
 - perc: sd, cp, rim, lt, mt, ht (no bd, no hats)
 - bass: the bassline, synth sounds only
 - synth: stabs, chords, leads, arps, pads (synth sounds) or noise FX
+- vox: vocal shots and FX one-shots (vox samples) or a vowel-filtered synth chant
 `.trim();
 
 /** Random constraints per request: small models otherwise keep re-emitting the example track. */
@@ -69,7 +84,12 @@ const TWISTS = [
 	"synth: a 16th-note arpeggio using n('...').scale(...)",
 	'synth: a slow filter sweep with sine.range(...).slow(16)',
 	'synth: a call-and-response melody across two bars using <...>',
-	'drums: add a fill with .every(4, x => x.fast(2)) on one layer'
+	'drums: add a fill with .lastOf(8, x => x.ply(2)) on one layer',
+	'hats: a polymeter like {hh ~ oh}%16 against the kick',
+	'vox: a rave shout (rave:0, rave:4 or rave:5) on bar 1 of every 8',
+	'vox: a robot chant with .vowel() on a sawtooth note every 4 bars',
+	'vox: spoken numbers counting across bars with <...>',
+	'synth: open the filter with arc so it grows with the track'
 ];
 const pick = <T>(xs: readonly T[], n: number): T[] =>
 	[...xs].sort(() => Math.random() - 0.5).slice(0, n);
