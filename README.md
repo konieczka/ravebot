@@ -1,6 +1,6 @@
-# TechnoBot 🤖🎛️
+# RaveBot 🤖🎛️
 
-A pixel-art robot DJ that live-codes techno in [Strudel](https://strudel.cc) with an LLM and mixes the tracks into one continuous set.
+A pixel-art robot DJ in a Berlin warehouse club that live-codes techno in [Strudel](https://strudel.cc) with an LLM and mixes the tracks into one continuous set.
 
 ## Run it
 
@@ -9,7 +9,7 @@ pnpm install
 pnpm dev
 ```
 
-Open the page and press **WAKE UP TECHNOBOT**. Without any configuration the bot runs in **offline mode**: it remixes its built-in seed tracks layer by layer, so you can work on the UI and the mixer without an LLM. The **Track source** switch (AI generated / Local crate) forces the same local mode at any time, even with a gateway configured.
+Open the page and press **WAKE UP RAVEBOT**. Without any configuration the bot runs in **offline mode**: it remixes its built-in seed tracks layer by layer, so you can work on the UI and the mixer without an LLM. The **Track source** switch (AI generated / Local crate) forces the same local mode at any time, even with a gateway configured.
 
 ## Connect an LLM (Cloudflare AI Gateway)
 
@@ -41,7 +41,9 @@ Controls ─► DjBrain (src/lib/dj/brain.svelte.ts) ─► /api/generate ─►
 - **Arrangement:** every track is 128 bars, and layer code is a full-energy loop. `src/lib/dj/arrangement.ts` arranges it per event against the track's own timeline: groove (drums + bass), lift (+ synth), main (+ vox), a 16-bar breakdown (kick and bass out, DJ low-pass opening), an 8-bar build (a drum roll speeding from quarters to 32nds, a noise riser, a high-pass sweep, one beat of silence), the drop with a crash + sub boom, a 32-bar peak, then the 16-bar mix-out. Each genre has its own arc style (dub swells with no roll or gap, acid keeps its 303 line in the breakdown, hard techno pumps the sidechain hardest). Held tracks loop main → breakdown → peak. Layer code runs in track time (`.late(origin)`), so `<...>` sequences and `.lastOf(8, ...)` fills line up with phrases, and it can read `arc`, the track's 0..1 intensity, e.g. `.lpf(arc.range(300, 3000))`.
 - **Dry run:** before a track is queued, every layer is compiled and queried for 4 bars without playing (`engine.dryRun`). Runtime errors, empty patterns and unknown sounds/banks are caught, and broken layers are replaced by the current track's layer (or the whole track by the backup crate).
 - **Seamless mixing:** both decks play inside one `stack(...)`. Each layer gets `.postgain(signal(t => gain(deck, layer, t)))` (crossfade × arrangement), its deck's DJ filter (`djf`) and an orbit, so the kick can sidechain the deck's bass/synth/vox (`duckorbit`), so the crossfade is computed per event at its exact cycle position with a single `evaluate()` per transition. Hats/perc blend in first, then the synth, and kick + bass swap hard on the middle downbeat, the way a DJ swaps bass with the EQ. Transitions start on 4-bar phrase boundaries.
-- **Controls:** track source (AI or local crate), subgenre, BPM (the app owns the tempo and glides at ~0.4 BPM/s), AI-only settings (energy, weirdness, which also raises the LLM temperature, and a free-text crowd request), skip, hold, and per-layer locks that carry a layer through the next transition (and keep it in through breakdowns).
+- **The club:** the top of the page is a 480×270 pixel-art canvas (`src/lib/club/scene.ts`), drawn every frame and scaled up with crisp pixels. It reads no audio: every light and dancer follows the same schedule the music uses (the beat phase of the Strudel clock, `Mixer.gain()` per layer and the arrangement section), so it stays exactly on the beat. Kick moves the crowd and the speakers, hats flick the wristbands and balcony neon, bass drives the booth underglow, synth turns on the lasers, vox lights the neon signs, and the breakdown, build, blackout and drop each get their own scene. On phones the canvas is cropped to the booth.
+- **Queue:** the brain writes up to 3 tracks ahead, one at a time, each following the last one queued. Cards show the playing track's arc, the queued tracks (flip to read the code, or drop one to have it rewritten) and the one being written. Changing subgenre, source, energy or weirdness rewrites the queue.
+- **Controls:** track source (AI or local crate), subgenre, BPM (the app owns the tempo and glides at ~0.4 BPM/s), AI-only settings (energy and weirdness, which also raises the LLM temperature), skip, hold, and per-layer locks that carry a layer through the next transition (and keep it in through breakdowns).
 
 ## Scripts
 
@@ -53,4 +55,4 @@ Controls ─► DjBrain (src/lib/dj/brain.svelte.ts) ─► /api/generate ─►
 
 ## License
 
-Strudel is AGPL-3.0-or-later, and TechnoBot bundles it, so TechnoBot must be distributed under the AGPL as well. Publish the source alongside the deployed app.
+Strudel is AGPL-3.0-or-later, and RaveBot bundles it, so RaveBot must be distributed under the AGPL as well. Publish the source alongside the deployed app.

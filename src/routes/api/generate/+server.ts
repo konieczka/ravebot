@@ -47,7 +47,6 @@ function parseRequest(body: any): GenerateRequest | null {
 		energy: Math.round(num(body.energy, 1, 10, 6)),
 		weirdness: Math.round(num(body.weirdness, 0, 10, 3))
 	};
-	if (typeof body.vibe === 'string' && body.vibe.trim()) req.vibe = body.vibe.trim().slice(0, 140);
 	const prev = body.previous;
 	if (prev && typeof prev.title === 'string' && prev.layers && typeof prev.layers === 'object') {
 		// The previous track goes back into the prompt, so only accept layers that pass validation.
@@ -137,7 +136,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		return json({
 			ok: false,
 			offline: true,
-			error: 'CF_ACCOUNT_ID is not set — TechnoBot is spinning offline.'
+			error: 'CF_ACCOUNT_ID is not set — RaveBot is spinning offline.'
 		} satisfies GenerateResponse);
 	}
 	const req = parseRequest(await request.json().catch(() => null));

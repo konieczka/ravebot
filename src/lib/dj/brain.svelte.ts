@@ -15,6 +15,8 @@ import {
 import { validateLayers } from './validate.js';
 
 const SKIP_TRANSITION_BARS = 8;
+/** How many tracks are written ahead of the one playing. */
+export const QUEUE_DEPTH = 3;
 const TICK_MS = 200;
 /** Max BPM change per tick while gliding to a new tempo (~0.4 BPM/s). */
 const BPM_STEP = 0.08;
@@ -24,10 +26,13 @@ export type Status = 'off' | 'booting' | 'live';
 export type TrackSource = 'ai' | 'local';
 export type Mood = 'idle' | 'groove' | 'think' | 'mix' | 'glitch';
 
-export interface LogLine {
-	id: number;
-	text: string;
-	kind: 'info' | 'ok' | 'warn' | 'err';
+/** The track currently being written, and the settings it was asked for. */
+export interface WriteJob {
+	genre: GenreId;
+	bpm: number;
+	energy: number;
+	weirdness: number;
+	source: TrackSource;
 }
 
 /**
@@ -41,7 +46,6 @@ export class DjBrain {
 	targetBpm = $state(128);
 	energy = $state(6);
 	weirdness = $state(3);
-	vibe = $state('');
 	hold = $state(false);
 	locked = $state<Record<LayerName, boolean>>({
 		kick: false,
@@ -58,13 +62,15 @@ export class DjBrain {
 	cycle = $state(0);
 	decks = $state<[Track | null, Track | null]>([null, null]);
 	live = $state<Deck>(0);
-	next = $state<Track | null>(null);
-	generating = $state(false);
+	/** Upcoming tracks, ready to mix, in play order. */
+	queue = $state<Track[]>([]);
+	writing = $state<WriteJob | null>(null);
 	transitioning = $state(false);
 	offline = $state(false);
 	glitchUntil = $state(0);
 	speech = $state('');
-	log = $state<LogLine[]>([]);
+	/** Bumped on every message, so the same line said twice still pops up again. */
+	speechId = $state(0);
 
 	mixer = new Mixer();
 	private trackStart = 0;
@@ -74,17 +80,17 @@ export class DjBrain {
 	private busy = false;
 	private timer: ReturnType<typeof setInterval> | undefined;
 	private raf = 0;
-	private logId = 0;
 
 	mood: Mood = $derived.by(() => {
 		if (this.status !== 'live') return this.status === 'booting' ? 'think' : 'idle';
 		if (this.cycle < this.glitchUntil) return 'glitch';
 		if (this.transitioning) return 'mix';
-		if (this.generating) return 'think';
+		if (this.writing) return 'think';
 		return 'groove';
 	});
 
 	liveTrack = $derived(this.decks[this.live]);
+	next = $derived(this.queue[0] ?? null);
 
 	constructor() {
 		if (browser) (globalThis as any)[MIXER_GLOBAL] = this.mixer;
@@ -96,20 +102,29 @@ export class DjBrain {
 		if (id === this.genre) return;
 		this.genre = id;
 		this.targetBpm = genreById(id).bpm;
-		this.invalidateNext(`Switching to ${genreById(id).name}`);
+		this.invalidateQueue(`Switching to ${genreById(id).name}`);
 	}
 
-	/** Called when a control that shapes the next track changes; the queued track gets re-generated. */
-	invalidateNext(reason?: string) {
+	/** Called when a control that shapes upcoming tracks changes: the queue is written again. */
+	invalidateQueue(reason?: string) {
 		this.genStamp++;
-		if (this.next) this.next = null;
-		if (reason && this.status === 'live') this.say(`> ${reason}. Rewriting next track...`);
+		this.queue = [];
+		this.writing = null;
+		if (reason && this.status === 'live') this.say(`${reason}. Rewriting the queue.`);
+	}
+
+	/** Removes one queued track; the writer fills the gap. */
+	dropQueued(id: string) {
+		const track = this.queue.find((t) => t.id === id);
+		if (!track) return;
+		this.queue = this.queue.filter((t) => t.id !== id);
+		this.say(`Dropped "${track.title}".`);
 	}
 
 	setSource(source: TrackSource) {
 		if (source === this.source) return;
 		this.source = source;
-		this.invalidateNext(source === 'ai' ? 'AI generation on' : 'Local crate only');
+		this.invalidateQueue(source === 'ai' ? 'AI generation on' : 'Local crate only');
 	}
 
 	toggleLock(layer: LayerName) {
@@ -122,7 +137,7 @@ export class DjBrain {
 		if (this.status !== 'live' || this.transitioning) return;
 		this.skipRequested = true;
 		this.hold = false;
-		this.say(this.next ? '> Skip! Mixing now.' : '> Skip queued, still writing...');
+		this.say(this.next ? 'Skip! Mixing now.' : 'Skip queued, still writing...');
 	}
 
 	// ── lifecycle ───────────────────────────────────────────────────────────
@@ -130,12 +145,12 @@ export class DjBrain {
 	async start() {
 		if (this.status !== 'off') return;
 		this.status = 'booting';
-		this.say('> booting TechnoBot v0.1 ...');
+		this.say('Booting RaveBot...');
 		try {
 			await engine.initEngine();
 		} catch (e) {
 			this.status = 'off';
-			this.say(`! audio engine failed: ${(e as Error).message}`, 'err');
+			this.say(`Audio engine failed: ${(e as Error).message}`);
 			return;
 		}
 		this.bpm = this.targetBpm;
@@ -161,13 +176,12 @@ export class DjBrain {
 			await engine.play(buildProgram(this.decks, this.mixer));
 		} catch (e) {
 			this.status = 'off';
-			this.say(`! could not start: ${(e as Error).message}`, 'err');
+			this.say(`Could not start: ${(e as Error).message}`);
 			return;
 		}
 		this.status = 'live';
 		this.trackStart = 0;
-		this.speech = opener.comment;
-		this.say(`> now playing: ${opener.title}`, 'ok');
+		this.say(opener.comment);
 		this.timer = setInterval(() => this.tick(), TICK_MS);
 		const frame = () => {
 			this.cycle = engine.now();
@@ -184,15 +198,14 @@ export class DjBrain {
 		Object.assign(this, {
 			status: 'off',
 			decks: [null, null],
-			next: null,
+			queue: [],
+			writing: null,
 			transitioning: false,
-			generating: false,
 			cycle: 0
 		});
 		this.mixer.plan = null;
 		this.mixer.timelines = [null, null];
-		this.speech = 'Set over. Thank you, carbon lifeforms.';
-		this.say('> set stopped');
+		this.say('Set over. Thank you, carbon lifeforms.');
 	}
 
 	// ── main loop ───────────────────────────────────────────────────────────
@@ -212,16 +225,13 @@ export class DjBrain {
 			if (!this.announced && c >= plan.start + plan.bars / 2) {
 				this.announced = true;
 				const incoming = this.decks[plan.to];
-				if (incoming) {
-					this.speech = incoming.comment || incoming.title;
-					this.say(`> DROP: ${incoming.title}`, 'ok');
-				}
+				if (incoming) this.say(incoming.comment || incoming.title);
 			}
 			if (c >= plan.start + plan.bars) await this.guard(() => this.finishTransition());
 			return;
 		}
 
-		if (!this.next && !this.generating) void this.generateNext();
+		if (this.queue.length < QUEUE_DEPTH && !this.writing) void this.generateNext();
 
 		const due =
 			this.skipRequested || (!this.hold && c >= this.trackStart + TRACK_BARS - TRANSITION_BARS);
@@ -238,10 +248,10 @@ export class DjBrain {
 	}
 
 	private async beginTransition(c: number) {
-		const incoming = this.next!;
+		const incoming = this.queue[0];
 		const skip = this.skipRequested;
 		this.skipRequested = false;
-		this.next = null;
+		this.queue = this.queue.slice(1);
 
 		const from = this.live;
 		const to: Deck = from === 0 ? 1 : 0;
@@ -265,14 +275,13 @@ export class DjBrain {
 			// The incoming track blew up inside Strudel: drop it and keep the current one playing.
 			this.mixer.plan = null;
 			this.mixer.timelines[to] = null;
-			this.glitch(`! "${incoming.title}" crashed the decks (${(e as Error).message}). Recovering.`);
+			this.glitch(`"${incoming.title}" crashed the decks (${(e as Error).message}). Recovering.`);
 			await engine.play(buildProgram(this.decks, this.mixer)).catch(() => {});
 			return;
 		}
 		this.decks = decks;
 		this.transitioning = true;
 		this.announced = false;
-		this.say(`> mixing in "${incoming.title}" over ${bars} bars`, 'info');
 	}
 
 	private async finishTransition() {
@@ -288,42 +297,45 @@ export class DjBrain {
 		this.trackStart = plan.start + plan.bars / 2;
 		await engine
 			.play(buildProgram(decks, this.mixer))
-			.catch((e) => this.glitch(`! re-patch failed: ${e.message}`));
+			.catch((e) => this.glitch(`Re-patch failed: ${e.message}`));
 	}
 
 	// ── generation ──────────────────────────────────────────────────────────
 
 	private async generateNext() {
 		const stamp = this.genStamp;
-		const current = this.decks[this.live];
+		// Each new track follows the last one in the queue, so the whole chain mixes smoothly.
+		const current = this.queue.at(-1) ?? this.decks[this.live];
 		const genre = this.genre;
 		const req: GenerateRequest = {
 			genre,
 			bpm: this.targetBpm,
 			energy: this.energy,
 			weirdness: this.weirdness,
-			vibe: this.vibe.trim() || undefined,
 			previous: current ? { title: current.title, layers: current.layers } : undefined
 		};
 
-		this.generating = true;
+		this.writing = {
+			genre,
+			bpm: req.bpm,
+			energy: req.energy,
+			weirdness: req.weirdness,
+			source: this.source
+		};
 		let track: Track;
 		if (this.source === 'local') {
-			this.say(`> digging the local crate: ${genreById(genre).name}`);
 			track = fallbackTrack(genre, current?.layers);
 		} else {
-			this.say(
-				`> prompting LLM: ${genreById(genre).name}, energy ${req.energy}, weird ${req.weirdness}`
-			);
 			try {
 				track = await this.requestTrack(req);
 			} catch (e) {
-				this.say(`! generation failed (${(e as Error).message}), using backup crate`, 'warn');
+				this.say(`Generation failed (${(e as Error).message}), using the backup crate.`);
 				track = fallbackTrack(genre, current?.layers);
+				track.flags = ['AI FAILED'];
 			}
 		}
 		if (stamp !== this.genStamp || this.status !== 'live') {
-			this.generating = false;
+			if (stamp === this.genStamp) this.writing = null;
 			return; // controls changed (or set stopped) while we were waiting: the tick will ask again
 		}
 
@@ -332,15 +344,19 @@ export class DjBrain {
 			.catch((e) => ({ kick: (e as Error).message }));
 		const broken = Object.keys(problems) as LayerName[];
 		if (broken.length) {
-			this.glitch(`! dry run failed: ${broken.map((l) => `${l} (${problems[l]})`).join(', ')}`);
-			if (broken.includes('kick')) track = fallbackTrack(genre, current?.layers);
-			else for (const l of broken) track.layers[l] = current?.layers[l] ?? 'silence';
+			this.glitch(`Dry run failed: ${broken.map((l) => `${l} (${problems[l]})`).join(', ')}`);
+			if (broken.includes('kick')) {
+				track = fallbackTrack(genre, current?.layers);
+				track.flags = ['KICK BROKE'];
+			} else {
+				for (const l of broken) track.layers[l] = current?.layers[l] ?? 'silence';
+				track.flags = [...(track.flags ?? []), `SWAPPED ${broken.join(' ').toUpperCase()}`];
+			}
 		}
 
-		this.generating = false;
 		if (stamp !== this.genStamp) return;
-		this.next = track;
-		this.say(`> next up: "${track.title}" [${track.source}]`, 'ok');
+		this.writing = null;
+		this.queue = [...this.queue, track];
 	}
 
 	private async requestTrack(req: GenerateRequest): Promise<Track> {
@@ -353,14 +369,13 @@ export class DjBrain {
 		const data: GenerateResponse = await res.json();
 		if (!data.ok) {
 			if (data.offline) {
-				if (!this.offline) this.say('> no AI Gateway configured: offline remix mode', 'warn');
+				if (!this.offline) this.say('No AI Gateway configured. Remixing the crate offline.');
 				this.offline = true;
 				return fallbackTrack(req.genre, req.previous?.layers);
 			}
 			throw new Error(data.error);
 		}
 		this.offline = false;
-		if (data.repaired.length) this.say(`> patched layers: ${data.repaired.join(', ')}`, 'warn');
 
 		// The server already validated, but the browser is where the code runs: check again.
 		const { layers, errors } = validateLayers(data.track.layers);
@@ -371,7 +386,8 @@ export class DjBrain {
 			layers: layers as Track['layers'],
 			id: crypto.randomUUID(),
 			genre: req.genre,
-			source: 'llm'
+			source: 'llm',
+			flags: data.repaired.length ? [`PATCHED ${data.repaired.join(' ').toUpperCase()}`] : undefined
 		};
 	}
 
@@ -383,10 +399,12 @@ export class DjBrain {
 
 	private glitch(text: string) {
 		this.glitchUntil = engine.now() + 2;
-		this.say(text, 'err');
+		this.say(text);
 	}
 
-	say(text: string, kind: LogLine['kind'] = 'info') {
-		this.log = [...this.log.slice(-40), { id: ++this.logId, text, kind }];
+	/** Puts a line in RaveBot's speech bubble. */
+	say(text: string) {
+		this.speech = text;
+		this.speechId++;
 	}
 }

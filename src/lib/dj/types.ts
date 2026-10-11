@@ -13,6 +13,8 @@ export interface Track {
 	layers: Layers;
 	/** Where the track came from: the LLM or the built-in fallback remixer. */
 	source: 'llm' | 'fallback';
+	/** Short warnings shown on the track's queue card, e.g. a layer the validator had to patch. */
+	flags?: string[];
 }
 
 export interface GenerateRequest {
@@ -22,7 +24,6 @@ export interface GenerateRequest {
 	energy: number;
 	/** 0..10 */
 	weirdness: number;
-	vibe?: string;
 	previous?: Pick<Track, 'title' | 'layers'>;
 }
 

@@ -19,11 +19,15 @@
 
 <style>
 	:global(:root) {
-		--bg: #0b0918;
-		--panel: #1d1835;
-		--text: #e8e6ff;
-		--muted: #8a84b8;
-		--crt: #4dff9a;
+		--bg: #08060f;
+		--edge: #040309;
+		--hull: #110d1d;
+		--panel: #1a1530;
+		--panel-hi: #2b2449;
+		--text: #ece8ff;
+		--muted: #8f88bb;
+		--ok: #4dff9a;
+		--pink: #ff3dc8;
 		--font-pixel: 'Press Start 2P', ui-monospace, monospace;
 		--font-mono: 'VT323', ui-monospace, monospace;
 		color-scheme: dark;

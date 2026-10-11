@@ -8,6 +8,16 @@ import { HYPNOTIC } from './seeds/hypnotic';
 import { MINIMAL } from './seeds/minimal';
 import type { GenreId } from './types';
 
+/** Accent color of each subgenre: lasers, light lenses and the UI accent. */
+export const GENRE_COLORS: Record<GenreId, string> = {
+	minimal: '#4dd2ff',
+	acid: '#c6ff3d',
+	hard: '#ff3b5c',
+	dub: '#5c8bff',
+	detroit: '#ffb03b',
+	hypnotic: '#c06bff'
+};
+
 export interface Genre {
 	id: GenreId;
 	name: string;

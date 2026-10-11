@@ -115,7 +115,7 @@ export function buildMessages(req: GenerateRequest) {
 	const key = pick(KEYS, 1)[0];
 
 	const system = [
-		'You are TechnoBot, a robot DJ who live-codes techno tracks in Strudel (a JavaScript port of TidalCycles).',
+		'You are RaveBot, a robot DJ who live-codes techno tracks in Strudel (a JavaScript port of TidalCycles).',
 		'You answer with a single JSON object and nothing else.',
 		CHEAT_SHEET,
 		LAYER_ROLES,
@@ -133,7 +133,6 @@ export function buildMessages(req: GenerateRequest) {
 		`Key: ${key} minor (bass in octave 1-2, synth in octave 3-5).`,
 		`Ideas for this track: ${pick(TWISTS, 2).join('; ')}.`
 	);
-	if (req.vibe) lines.push(`Crowd request / vibe: "${req.vibe}"`);
 	if (req.previous) {
 		lines.push(
 			`The previous track was "${req.previous.title}":\n${JSON.stringify(req.previous.layers)}`,

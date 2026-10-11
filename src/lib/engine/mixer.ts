@@ -122,7 +122,7 @@ export class Mixer {
 }
 
 /** Name of the global the generated Strudel code reads the mixer from. */
-export const MIXER_GLOBAL = '__technobot';
+export const MIXER_GLOBAL = '__ravebot';
 
 const M = MIXER_GLOBAL;
 /** Kick/drums and the tonal layers of each deck go to separate orbits so the kick can duck the rest. */

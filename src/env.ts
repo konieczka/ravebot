@@ -6,7 +6,7 @@ export const variables = defineEnvVars({
 	CF_ACCOUNT_ID: {
 		schema: optional,
 		description:
-			'Cloudflare account id that owns the AI Gateway. Leave unset to run TechnoBot in offline mode.'
+			'Cloudflare account id that owns the AI Gateway. Leave unset to run RaveBot in offline mode.'
 	},
 	CF_AI_GATEWAY_ID: {
 		schema: (value) => value || 'default',

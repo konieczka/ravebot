@@ -20,7 +20,6 @@ describe('buildMessages', () => {
 			bpm: 134,
 			energy: 8,
 			weirdness: 2,
-			vibe: 'sweaty basement',
 			previous: {
 				title: 'Prev',
 				layers: {
@@ -36,7 +35,6 @@ describe('buildMessages', () => {
 		expect(system.content).toMatch(/STRUDEL CHEAT SHEET/);
 		expect(user.content).toMatch(/Acid/);
 		expect(user.content).toMatch(/Energy: 8\/10/);
-		expect(user.content).toMatch(/sweaty basement/);
 		expect(user.content).toMatch(/"Prev"/);
 	});
 });

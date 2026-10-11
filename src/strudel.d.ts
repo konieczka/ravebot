@@ -1,4 +1,4 @@
-// Strudel ships without type declarations; these cover the small surface TechnoBot uses.
+// Strudel ships without type declarations; these cover the small surface RaveBot uses.
 declare module '@strudel/web' {
 	export interface Hap {
 		value: Record<string, unknown>;
