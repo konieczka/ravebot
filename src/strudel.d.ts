@@ -16,7 +16,10 @@ declare module '@strudel/web' {
 		prebake?: () => Promise<unknown> | unknown;
 		onEvalError?: (err: Error) => void;
 	}): Promise<StrudelRepl>;
-	export function samples(source: string | Record<string, unknown>): Promise<void>;
+	export function samples(
+		source: string | Record<string, unknown>,
+		baseUrl?: string
+	): Promise<void>;
 	export function getAudioContext(): AudioContext;
 	export function initAudioOnFirstClick(options?: object): Promise<void>;
 	export function getSound(name: string): unknown;

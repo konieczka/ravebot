@@ -1,5 +1,6 @@
 import { genreById } from '#lib/dj/genres.js';
 import { LAYERS, type GenerateRequest } from '#lib/dj/types.js';
+import { RUS_VOICE } from '#lib/dj/voices.js';
 
 const CHEAT_SHEET = `
 STRUDEL CHEAT SHEET (the only features you may use)
@@ -33,6 +34,9 @@ Sound sources:
      numbers:0-8 spoken digits   speech:0-6 short words   speakspell:0-11 robot voice
      hoover:0-5 rave hoover   stab:0-22 rave chord stabs   space:0-17 sci-fi FX
      metal:0-9 industrial:0-31 noise2:0-7 metallic hits   wind:0-9 bleep:0-12 mouth:0-14
+     rus:0-${RUS_VOICE.length - 1} Russian shouts (hardbass): ${RUS_VOICE.map((v, i) => `rus:${i} ${v.word} (${v.meaning})`).join(', ')}
+  Distorted "bochka" kick samples (kick layer only, NEVER a bank): s('hardkick:4*4').decay(.18).sustain(0)
+     best: hardkick:3 hardkick:4 hardkick:5 gabba:0 (very loud: gain .6) clubkick:2 (add .shape(.4)); cut the tail with decay/sustain so it ends before the off-beat bass
   Robot "vocals" from a synth: note('<c4 ~ ~ ~>').s('sawtooth').vowel('<a o>')   vowels: a e i o u
 
 Effects (chain as methods, numbers or patterns):
@@ -46,7 +50,8 @@ Pattern transforms: .fast(2) .slow(2) .rev() .ply(2) .degradeBy(.3) .sometimesBy
   .every(4, x => x.fast(2)) .off(1/8, x => x.add(note(12))) .jux(rev) .struct('x ~ x x') .mask('<1 [1 0]>')
   .lastOf(8, x => x.ply(2)) (a fill in the last bar of every 8)   .swingBy(1/6, 8) (16th swing)
   Filter envelope (acid plucks): .lpf(300).lpenv(4).lpa(.01).lpd(.12).lpq(14)
-  FM and pitch envelope (metallic donks, zaps): .fm(4).fmh(1.5) .penv(12).pdecay(.05)
+  FM and pitch envelope (zaps): .fm(4).fmh(1.5) .penv(12).pdecay(.05)
+  Hollow FM "donk" bass: note('[~ a1]*4').s('sine').fm(3).fmh(2).fmwave('triangle').fmdecay(.12).fmsustain(.25).decay(.3).sustain(0)
   .phaser(2) (swirling disco loop)  .vib(6).vibmod(.3) (vibrato, e.g. whistles)
   Short tight kick: s('bd*4').bank('RolandTR909').decay(.15).sustain(0)
 Combine: stack(a, b)  cat(a, b)
@@ -65,7 +70,7 @@ RULES
 
 const LAYER_ROLES = `
 Layers (the DJ mixer crossfades each one separately, so every sound must sit in its own layer):
-- kick: ONLY bd. Never sd/hh/cp here.
+- kick: ONLY bd (or the hardkick/gabba/clubkick samples). Never sd/hh/cp here.
 - hats: ONLY hh, oh, rd, cr
 - perc: sd, cp, rim, lt, mt, ht (no bd, no hats)
 - bass: the bassline, synth sounds only

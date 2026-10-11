@@ -44,7 +44,7 @@ const METHODS = new Set(
 		'decay sustain attack release room size delay delaytime delayfeedback speed legato clip vowel phaser ' +
 		'fast slow rev ply degradeBy sometimesBy sometimes rarely often every firstOf lastOf off jux struct ' +
 		'mask range rangex segment add sub mul late early euclid swingBy chop iter palindrome hurry linger ' +
-		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo vib vibmod phaserdepth'
+		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo vib vibmod phaserdepth fmwave fmattack fmdecay fmsustain fmenv'
 	).split(' ')
 );
 
@@ -174,15 +174,19 @@ export const VOX = new Set([
 	'metal',
 	'industrial',
 	'noise2',
-	'bleep'
+	'bleep',
+	// Russian shouts for hardbass (see voices.ts)
+	'rus'
 ]);
+/** Distorted Dirt-Samples kicks (the hardbass "bochka"). Sample sets, so they never use a bank. */
+export const KICK_SAMPLES = new Set(['hardkick', 'gabba', 'clubkick']);
 
 /** Rave samples that also work as a lead in the synth layer (hoover riffs, chord stabs). */
 const SYNTH_SAMPLES = new Set(['hoover', 'stab']);
 
 /** Which sounds each layer may use, so the mixer's per-layer blends stay meaningful. */
 const ROLE_SOUNDS: Record<LayerName, (name: string) => boolean> = {
-	kick: (n) => n === 'bd',
+	kick: (n) => n === 'bd' || KICK_SAMPLES.has(n),
 	hats: (n) => ['hh', 'oh', 'rd', 'cr', 'sh'].includes(n),
 	perc: (n) => DRUMS.has(n) && n !== 'bd',
 	bass: (n) => SYNTHS.has(n),
@@ -311,7 +315,13 @@ function lint(expr: Node, role: LayerName): void {
 	if (!sounds.length && !hasNotes)
 		throw new ValidationError('layer has no sound: start from s(...), note(...) or n(...)');
 	for (const name of new Set(sounds)) {
-		if (!DRUMS.has(name) && !SYNTHS.has(name) && !NOISE.has(name) && !VOX.has(name))
+		if (
+			!DRUMS.has(name) &&
+			!SYNTHS.has(name) &&
+			!NOISE.has(name) &&
+			!VOX.has(name) &&
+			!KICK_SAMPLES.has(name)
+		)
 			throw new ValidationError(`unknown sound "${name}"`);
 		if (!ROLE_SOUNDS[role](name))
 			throw new ValidationError(`"${name}" does not belong in the ${role} layer`);

@@ -1,5 +1,6 @@
 import type { Pattern, StrudelRepl } from '@strudel/web';
 import { LAYERS, type Layers } from '#lib/dj/types.js';
+import { RUS_BASE, RUS_FILES } from '#lib/dj/voices.js';
 import { ORBITS } from './mixer.js';
 
 /**
@@ -23,7 +24,9 @@ export async function initEngine(): Promise<void> {
 		prebake: () =>
 			Promise.all([
 				web!.samples(DRUM_MACHINES),
-				web!.samples(DIRT_SAMPLES).catch((e: Error) => console.warn('vox samples:', e))
+				web!.samples(DIRT_SAMPLES).catch((e: Error) => console.warn('vox samples:', e)),
+				// Hardbass shouts, bundled with the app (see voices.ts).
+				web!.samples({ rus: RUS_FILES }, RUS_BASE)
 			]),
 		onEvalError: (err) => (lastEvalError = err)
 	});
