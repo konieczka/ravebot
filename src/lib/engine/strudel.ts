@@ -4,6 +4,7 @@ import { RUS_BASE, RUS_FILES } from '#lib/dj/voices.js';
 import type { MixProfile } from '#lib/dj/mix.js';
 import { MixDesk, type AudioController } from './master.js';
 import { ORBITS } from './mixer.js';
+import { clearWorkerInterval, setWorkerInterval } from './timer.js';
 
 /**
  * Thin client-only wrapper around @strudel/web. Strudel touches `window` on import,
@@ -31,7 +32,10 @@ export async function initEngine(): Promise<void> {
 				// Hardbass shouts, bundled with the app (see voices.ts).
 				web!.samples({ rus: RUS_FILES }, RUS_BASE)
 			]),
-		onEvalError: (err) => (lastEvalError = err)
+		onEvalError: (err) => (lastEvalError = err),
+		// Keep the scheduler ticking at full rate when the tab is hidden or unfocused (see timer.ts).
+		setInterval: setWorkerInterval,
+		clearInterval: clearWorkerInterval
 	});
 	await web.getAudioContext().resume();
 	// Strudel loads its AudioWorklets (djf, shape, crush, ...) on the first mousedown *after*

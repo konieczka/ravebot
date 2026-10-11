@@ -1,5 +1,6 @@
 import { browser } from '$app/env';
 import * as engine from '#lib/engine/strudel.js';
+import { clearWorkerInterval, setWorkerInterval } from '#lib/engine/timer.js';
 import { MIXER_GLOBAL, Mixer, buildProgram, type Deck } from '#lib/engine/mixer.js';
 import { TRACK_BARS, TRANSITION_BARS } from './arrangement.js';
 import { fallbackTrack } from './fallback.js';
@@ -89,7 +90,7 @@ export class DjBrain {
 	private skipRequested = false;
 	private announced = false;
 	private busy = false;
-	private timer: ReturnType<typeof setInterval> | undefined;
+	private timer: number | undefined;
 	private raf = 0;
 
 	mood: Mood = $derived.by(() => {
@@ -193,7 +194,8 @@ export class DjBrain {
 		this.status = 'live';
 		this.trackStart = 0;
 		this.say(opener.comment);
-		this.timer = setInterval(() => this.tick(), TICK_MS);
+		// Off the main thread's timers, so transitions and the tempo glide keep time in a background tab.
+		this.timer = setWorkerInterval(() => this.tick(), TICK_MS);
 		const frame = () => {
 			this.cycle = engine.now();
 			this.raf = requestAnimationFrame(frame);
@@ -202,7 +204,7 @@ export class DjBrain {
 	}
 
 	stopSet() {
-		clearInterval(this.timer);
+		clearWorkerInterval(this.timer);
 		cancelAnimationFrame(this.raf);
 		engine.stop();
 		this.genStamp++;

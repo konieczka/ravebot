@@ -15,6 +15,9 @@ declare module '@strudel/web' {
 	export function initStrudel(options?: {
 		prebake?: () => Promise<unknown> | unknown;
 		onEvalError?: (err: Error) => void;
+		/** The scheduler clock's timer (defaults to the global setInterval/clearInterval). */
+		setInterval?: (fn: () => void, ms: number) => unknown;
+		clearInterval?: (id: any) => void;
 	}): Promise<StrudelRepl>;
 	export function samples(
 		source: string | Record<string, unknown>,
