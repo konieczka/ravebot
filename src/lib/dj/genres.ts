@@ -196,6 +196,8 @@ export const GENRES: Genre[] = [
 			impact: true,
 			gap: true,
 			duck: 0.5,
+			// Shouts stay steady over the pump so every word is clear.
+			voxDuck: 0.15,
 			breakdown: { hats: 0.5, perc: 0.5 },
 			// The crowd chant carries through the build: a count on its last bar leads into the drop.
 			build: { vox: 1 }

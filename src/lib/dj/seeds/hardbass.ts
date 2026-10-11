@@ -20,7 +20,7 @@ export const HARDBASS: Seed[] = [
 			bass: `note('<[~ a1]*4 [~ a1]*4 [~ f1]*4 [~ e1 ~ e1 ~ e1 ~ g#1]>')${DONK}.fm(3).fmdecay(.12).fmsustain(.25).decay(.3).sustain(0).shape(.3).room(.15).gain(.7)`,
 			synth:
 				"note('<[a4 ~ c5 e5 ~ d5 c5 b4] [c5 ~ b4 a4 ~ g#4 ~ e4]>').s('supersaw').lpf(arc.range(1500, 4000)).decay(.15).sustain(.2).room(.3).gain(.13)",
-			vox: "s('<rus:0 ~ ~ ~ ~ ~ ~ ~>').gain(.85).room(.2)"
+			vox: "s('<rus:0 ~ ~ ~ ~ ~ ~ ~>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -33,7 +33,7 @@ export const HARDBASS: Seed[] = [
 			// Whistle
 			synth:
 				"note('<[d6 ~ ~ ~] ~ [a5 ~ c#6 ~ d6 ~ ~ ~] ~>').s('sine').vib(7).vibmod(.4).attack(.02).decay(.3).sustain(.3).gain(.12)",
-			vox: "s('<rus:0 ~ ~ ~ ~ ~ ~ [rus:2 rus:3 rus:4 ~]>').gain(.85).room(.2)"
+			vox: "s('<rus:0 ~ ~ ~ ~ ~ ~ [rus:2 rus:3 rus:4 ~]>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -45,7 +45,7 @@ export const HARDBASS: Seed[] = [
 			bass: `note('[~ e2]*4')${DONK}.fm(4).fmdecay(.1).fmsustain(.3).penv(3).pdecay(.02).decay(.3).sustain(0).shape(.3).room(.15).gain(.65).lastOf(4, x => x.add(note(3)))`,
 			synth:
 				"s('<hoover:2 ~ ~ ~ hoover:2 ~ hoover:3 ~>').lpf(arc.range(1500, 5000)).room(.3).gain(.35)",
-			vox: "s('<rus:8 ~ ~ ~ rus:1 ~ ~ [rus:1 ~ rus:1 ~]>').gain(.85).room(.2)"
+			vox: "s('<rus:8 ~ ~ ~ rus:1 ~ ~ [rus:1 ~ rus:1 ~]>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -58,7 +58,7 @@ export const HARDBASS: Seed[] = [
 			// Balalaika: tremolo-picked 16ths
 			synth:
 				"note('<[g4 bb4 d5 bb4] [g4 bb4 d5 g5] [eb5 d5 c5 bb4] [a4 f#4 a4 d5]>').ply(4).s('triangle').decay(.06).sustain(0).lpf(arc.range(2000, 5000)).gain(.14)",
-			vox: "s('<rus:7 ~ ~ ~ ~ ~ rus:9 ~>').gain(.85).room(.2)"
+			vox: "s('<rus:7 ~ ~ ~ ~ ~ rus:9 ~>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -71,7 +71,7 @@ export const HARDBASS: Seed[] = [
 			// Pumping-house off-beat stab; the harmonic-minor V chord (B natural) at the end.
 			synth:
 				"note('<[c4,eb4,g4] [c4,eb4,g4] [ab3,c4,eb4] [g3,b3,d4]>').struct('~ x ~ x ~ x ~ x').s('supersaw').lpf(arc.range(1200, 3500)).decay(.1).sustain(0).gain(.12)",
-			vox: "s('<rus:5 ~ rus:6 ~ ~ ~ ~ [rus:2 rus:3 rus:4 ~]>').gain(.85).room(.2)"
+			vox: "s('<rus:5 ~ rus:6 ~ ~ ~ ~ [rus:2 rus:3 rus:4 ~]>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -83,7 +83,7 @@ export const HARDBASS: Seed[] = [
 			bass: `note('<[~ f1]*4 [~ f1]*4 [~ f1]*4 [~ ab1 ~ g1 ~ f1 ~ c2]>')${DONK}.fm(3).fmdecay(.12).fmsustain(.25).decay(.3).sustain(0).shape(.3).room(.15).gain(.7)`,
 			synth:
 				"note('<[f5 ~ f5 ab5 ~ f5 c6 ~] [db6 ~ c6 ~ bb5 ~ e5 ~]>').s('sawtooth').lpf(arc.range(1500, 4500)).decay(.12).sustain(.15).delay(.19).delayfeedback(.3).gain(.12)",
-			vox: "s('<rus:10 ~ ~ ~ ~ ~ ~ ~ rus:0 ~ ~ ~ ~ ~ ~ [rus:0 ~ rus:0 ~]>').gain(.85).room(.2)"
+			vox: "s('<rus:10 ~ ~ ~ ~ ~ ~ ~ rus:0 ~ ~ ~ ~ ~ ~ [rus:0 ~ rus:0 ~]>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -95,7 +95,7 @@ export const HARDBASS: Seed[] = [
 			bass: `note('[~ b1]*4')${DONK}.fm(3.5).fmdecay(.14).fmsustain(.2).decay(.32).sustain(0).shape(.4).room(.2).gain(.7)`,
 			synth:
 				"note('<[b4,d5,f#5] ~ [a4,c#5,e5] ~ [g4,b4,d5] ~ [f#4,a#4,c#5] ~>').s('supersaw').attack(.01).decay(.4).sustain(.3).release(.3).lpf(arc.range(1200, 3500)).room(.4).gain(.12)",
-			vox: "s('<rus:11 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ space:6 ~ ~ ~>').gain(.85).room(.25)"
+			vox: "s('<rus:11 ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ ~ space:6 ~ ~ ~>').gain(.85).room(.1)"
 		}
 	},
 	{
@@ -108,7 +108,7 @@ export const HARDBASS: Seed[] = [
 			// Korobeiniki (Russian folk song, 1861): the A section on a vibrato square lead.
 			synth:
 				"note('<[e5 ~ b4 c5 d5 ~ c5 b4] [a4 ~ a4 c5 e5 ~ d5 c5] [b4 ~ ~ c5 d5 ~ e5 ~] [c5 ~ a4 ~ a4 ~ ~ ~]>').s('square').lpf(arc.range(1200, 3500)).vib(5).vibmod(.15).decay(.15).sustain(.3).delay(.19).gain(.11)",
-			vox: "s('<rus:9 ~ ~ ~ ~ ~ ~ [rus:2 rus:3 rus:4 ~]>').gain(.9).room(.2)"
+			vox: "s('<rus:9 ~ ~ ~ ~ ~ ~ [rus:2 rus:3 rus:4 ~]>').gain(.9).room(.1)"
 		}
 	},
 	{
@@ -121,7 +121,7 @@ export const HARDBASS: Seed[] = [
 			// Whistle, with the harmonic-minor D#
 			synth:
 				"note('<[e6 ~ ~ ~ b5 ~ ~ ~] [e6 ~ d#6 ~ b5 ~ ~ ~]>').s('sine').vib(8).vibmod(.5).attack(.02).decay(.25).sustain(.3).release(.1).gain(.13)",
-			vox: "s('<rus:0 ~ rus:0 ~ ~ ~ ~ [rus:0 rus:0 rus:0 ~]>').gain(.85).room(.2)"
+			vox: "s('<rus:0 ~ rus:0 ~ ~ ~ ~ [rus:0 rus:0 rus:0 ~]>').gain(.85).room(.1)"
 		}
 	}
 ];
