@@ -25,8 +25,13 @@ export interface ArcStyle {
 	impact: boolean;
 	/** One beat of silence right before the drop. */
 	gap: boolean;
-	/** Kick sidechain depth on bass/synth/vox, 0..1. */
+	/** Kick sidechain depth on bass and synth, 0..1. */
 	duck: number;
+	/**
+	 * Kick sidechain depth on the vox layer, 0..1 (defaults to `duck`). Lower it when vocals hold
+	 * their notes, so they ride over the pump instead of wobbling on every kick.
+	 */
+	voxDuck?: number;
 	/** Breakdown level overrides, e.g. acid keeps its 303 line playing without the kick. */
 	breakdown?: Partial<Record<LayerName, number>>;
 	/** Build-up level overrides, e.g. French house keeps the whole groove under its filter sweep. */

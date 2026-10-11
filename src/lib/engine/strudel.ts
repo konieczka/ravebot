@@ -1,5 +1,6 @@
 import type { Pattern, StrudelRepl } from '@strudel/web';
 import { LAYERS, type Layers } from '#lib/dj/types.js';
+import { ORBITS } from './mixer.js';
 
 /**
  * Thin client-only wrapper around @strudel/web. Strudel touches `window` on import,
@@ -33,6 +34,13 @@ export async function initEngine(): Promise<void> {
 	const ready = web.initAudioOnFirstClick();
 	document.dispatchEvent(new MouseEvent('mousedown'));
 	await ready;
+	// Create every deck orbit up front with a silent note. The kick ducks its deck's music and vox
+	// orbits, and superdough logs an error on every kick while a target orbit does not exist yet
+	// (the vox stays silent for the first 32 bars of a track).
+	const at = web.getAudioContext().currentTime + 0.05;
+	await Promise.allSettled(
+		ORBITS.map((orbit) => web!.superdough({ s: 'sine', gain: 0, orbit }, at, 0.01))
+	);
 	// Layers may read `arc` (track intensity). The mixer binds it per deck; this stand-in lets
 	// a single layer compile on its own for the dry run.
 	(globalThis as any).arc = web.signal(() => 0.6);
