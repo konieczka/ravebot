@@ -1,31 +1,26 @@
 <script lang="ts">
+	import { CITIES, type City, type StageId } from '#lib/club/cities/index.js';
+	import { WIN } from '#lib/club/cities/view.js';
+	import { W, H } from '#lib/club/draw.js';
 	import type { DjBrain } from '#lib/dj/brain.svelte.js';
 	import { GENRE_COLORS, GENRES } from '#lib/dj/genres.js';
-	import { LAYERS, type LayerName } from '#lib/dj/types.js';
-	import type { Deck } from '#lib/engine/mixer.js';
 
-	let { dj }: { dj: DjBrain } = $props();
+	let { dj, stage, onstage }: { dj: DjBrain; stage: StageId; onstage: (id: StageId) => void } =
+		$props();
 
-	const SEGMENTS = 10;
-	const beatOn = $derived(dj.cycle * 4 - Math.floor(dj.cycle * 4) < 0.3);
-
-	/** Audible level of a layer across both decks. */
-	function level(layer: LayerName) {
-		if (dj.status !== 'live') return 0;
-		let v = 0;
-		for (const deck of [0, 1] as Deck[]) {
-			const track = dj.decks[deck];
-			if (track && track.layers[layer] !== 'silence')
-				v = Math.max(v, dj.mixer.gain(deck, layer, dj.cycle));
-		}
-		return v;
-	}
-
-	/** Lit segments: the level, pumping on every beat. */
-	const lit = (gain: number) =>
-		gain > 0.01 ? Math.max(1, Math.round(gain * (beatOn ? SEGMENTS : SEGMENTS - 3))) : 0;
-	const segClass = (i: number, n: number) =>
-		i < n ? (i > 7 ? 'lit r' : i > 5 ? 'lit y' : 'lit') : '';
+	/** Paints a city's view (without the club around it) into a stage card. */
+	const skyline = (town: City) => (cv: HTMLCanvasElement) => {
+		const src = document.createElement('canvas');
+		src.width = W;
+		src.height = H;
+		const g = src.getContext('2d')!;
+		town.paint(g);
+		town.live(g, 0, 0.1, true);
+		const h = 116 - WIN.y;
+		cv.width = WIN.w;
+		cv.height = h;
+		cv.getContext('2d')!.drawImage(src, WIN.x, WIN.y, WIN.w, h, 0, 0, WIN.w, h);
+	};
 </script>
 
 <div class="console">
@@ -98,26 +93,21 @@
 		</div>
 	</section>
 
-	<section class="mod" aria-label="Layers">
-		<h2>LAYERS <small>LOCK = KEEP THROUGH NEXT MIX</small></h2>
-		<div class="strips">
-			{#each LAYERS as layer (layer)}
-				{@const n = lit(level(layer))}
-				<div class="strip">
-					<div class="meter" aria-hidden="true">
-						{#each Array(SEGMENTS) as _, i}
-							<i class={segClass(i, n)}></i>
-						{/each}
-					</div>
-					<span class="lbl">{layer.toUpperCase()}</span>
-					<button
-						class="lock"
-						class:on={dj.locked[layer]}
-						onclick={() => dj.toggleLock(layer)}
-						aria-pressed={dj.locked[layer]}
-						title="Keep {layer} through the next transition (and through breakdowns)">LOCK</button
-					>
-				</div>
+	<section class="mod" aria-label="Stage">
+		<h2>STAGE</h2>
+		<div class="stages" role="radiogroup" aria-label="City">
+			{#each CITIES as town (town.id)}
+				<button
+					class="stage"
+					class:on={stage === town.id}
+					role="radio"
+					aria-checked={stage === town.id}
+					onclick={() => onstage(town.id)}
+				>
+					<canvas {@attach skyline(town)} aria-hidden="true"></canvas>
+					<span class="name">{town.name}</span>
+					{#if stage === town.id}<span class="here">ON STAGE</span>{/if}
+				</button>
 			{/each}
 		</div>
 	</section>
@@ -154,7 +144,7 @@
 <style>
 	.console {
 		display: grid;
-		grid-template-columns: 1.05fr 1fr 1.3fr 1fr;
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 0.9fr);
 		gap: 4px;
 		background: var(--edge);
 		border-top: 4px solid var(--edge);
@@ -300,17 +290,24 @@
 		border: 3px solid var(--edge);
 	}
 	.pads {
+		flex: 1;
 		display: grid;
-		grid-template-columns: repeat(3, 1fr);
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		grid-auto-rows: minmax(46px, 1fr);
 		gap: 6px;
 	}
 	.pad {
 		position: relative;
-		padding: 16px 8px 10px;
+		min-width: 0;
+		display: flex;
+		align-items: flex-end;
+		padding: 14px 8px 8px;
 		font-size: 8px;
-		letter-spacing: 1px;
+		letter-spacing: 0;
+		line-height: 1.5;
 		text-align: left;
 		text-transform: uppercase;
+		overflow-wrap: anywhere;
 		background: #191427;
 	}
 	.pad::before {
@@ -331,57 +328,65 @@
 		opacity: 1;
 		box-shadow: 0 0 8px var(--c);
 	}
-	.strips {
+	.stages {
 		flex: 1;
 		display: grid;
-		grid-template-columns: repeat(6, 1fr);
+		grid-auto-rows: minmax(44px, 1fr);
 		gap: 6px;
 	}
-	.strip {
-		min-width: 0;
+	.stage {
+		position: relative;
+		overflow: hidden;
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		gap: 6px;
+		justify-content: center;
+		align-items: flex-start;
+		gap: 5px;
+		padding: 8px 10px;
+		text-align: left;
+		background: #0b0818;
 	}
-	.meter {
-		display: flex;
-		flex-direction: column-reverse;
-		gap: 2px;
+	.stage canvas {
+		position: absolute;
+		inset: 0;
 		width: 100%;
-		max-width: 30px;
-		padding: 3px;
-		background: var(--edge);
+		height: 100%;
+		object-fit: cover;
+		object-position: 50% 80%;
+		image-rendering: pixelated;
+		filter: saturate(0.55) brightness(0.55);
+		transition: filter 0.2s;
 	}
-	.meter i {
-		display: block;
-		height: 5px;
-		background: #221c36;
+	.stage::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(90deg, rgba(8, 6, 16, 0.85) 0%, rgba(8, 6, 16, 0.2) 75%);
 	}
-	.meter i.lit {
-		background: var(--ok);
+	.stage > span {
+		position: relative;
+		z-index: 1;
 	}
-	.meter i.lit.y {
-		background: #ffb03b;
+	.name {
+		font-size: 10px;
+		letter-spacing: 1px;
 	}
-	.meter i.lit.r {
-		background: var(--pink);
-	}
-	.lbl {
-		font-family: var(--font-pixel);
+	.here {
+		position: absolute !important;
+		top: 6px;
+		right: 6px;
+		padding: 3px 5px;
 		font-size: 7px;
-		color: var(--muted);
-	}
-	.lock {
-		width: 100%;
-		padding: 6px 0;
-		font-size: 7px;
-		color: var(--muted);
-		background: #191427;
-	}
-	.lock.on {
 		color: var(--edge);
-		background: #ffb03b;
+		background: var(--accent);
+	}
+	.stage.on {
+		border-color: var(--accent);
+		color: var(--text);
+		background: #0b0818;
+	}
+	.stage.on canvas {
+		filter: none;
 	}
 	@media (max-width: 1080px) {
 		.console {

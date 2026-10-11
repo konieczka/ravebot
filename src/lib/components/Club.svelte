@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import type { StageId } from '#lib/club/cities/index.js';
 	import { ClubScene, type SceneInput } from '#lib/club/scene.js';
 	import { intensity } from '#lib/dj/arrangement.js';
 	import type { DjBrain } from '#lib/dj/brain.svelte.js';
@@ -7,7 +8,7 @@
 	import { LAYERS, type LayerName } from '#lib/dj/types.js';
 	import type { Deck } from '#lib/engine/mixer.js';
 
-	let { dj }: { dj: DjBrain } = $props();
+	let { dj, stage }: { dj: DjBrain; stage: StageId } = $props();
 
 	let cv: HTMLCanvasElement;
 
@@ -44,7 +45,8 @@
 			loaded: [!!dj.decks[0], !!dj.decks[1]],
 			liveDeck: dj.live,
 			mixing: dj.transitioning,
-			reducedMotion
+			reducedMotion,
+			stage
 		};
 	}
 

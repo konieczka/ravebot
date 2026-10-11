@@ -42,6 +42,23 @@ const GLYPHS: Record<string, string> = {
 	' ': '000000000000000'
 };
 
+/** Polish and French letters: a base glyph plus marks drawn above, inside or below it. */
+const MARKS: Record<string, [string, [number, number][]]> = {
+	Ą: ['A', [[2, 5]]],
+	Ć: ['C', [[2, -1]]],
+	Ę: ['E', [[2, 5]]],
+	Ł: ['L', [[1, 2]]],
+	Ń: ['N', [[2, -1]]],
+	Ó: ['O', [[2, -1]]],
+	Ś: ['S', [[2, -1]]],
+	Ź: ['Z', [[2, -1]]],
+	Ż: ['Z', [[1, -1]]],
+	É: ['E', [[2, -1]]],
+	È: ['E', [[0, -1]]],
+	À: ['A', [[0, -1]]],
+	Ç: ['C', [[1, 5]]]
+};
+
 export const textWidth = (s: string, k = 1) => s.length * 4 * k - k;
 
 export function text(
@@ -55,7 +72,10 @@ export function text(
 	g.fillStyle = color;
 	s = s.toUpperCase();
 	for (let i = 0; i < s.length; i++) {
-		const glyph = GLYPHS[s[i]] ?? GLYPHS[' '];
+		const [base, marks] = MARKS[s[i]] ?? [s[i], []];
+		const glyph = GLYPHS[base] ?? GLYPHS[' '];
+		for (const [mx, my] of marks)
+			g.fillRect(Math.round(x + i * 4 * k + mx * k), Math.round(y + my * k), k, k);
 		for (let b = 0; b < 15; b++)
 			if (glyph[b] === '1')
 				g.fillRect(

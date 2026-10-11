@@ -1,6 +1,7 @@
 import type { SectionKind } from '#lib/dj/arrangement.js';
 import { LAYERS, type LayerName } from '#lib/dj/types.js';
-import { LINE_ARRAYS, WIN, berlinLive, paintBerlin, windowFrame } from './berlin.js';
+import { city, type City, type StageId } from './cities/index.js';
+import { LINE_ARRAYS, WIN, windowFrame } from './cities/view.js';
 import {
 	H,
 	W,
@@ -62,6 +63,8 @@ export interface SceneInput {
 	liveDeck: 0 | 1;
 	mixing: boolean;
 	reducedMotion: boolean;
+	/** Which city the club is in. */
+	stage: StageId;
 }
 
 type Envelopes = Record<LayerName, number>;
@@ -85,11 +88,11 @@ const CO2_X = [116, 364];
 /** Ceiling lamps hanging over the side walls. */
 const CAGE_LAMPS = [24, 80, 400, 456];
 
-function buildBackground() {
+function buildBackground(town: City) {
 	const [c, g] = canvas();
 	const R = rng(11);
 	px(g, 0, 0, W, H, '#07040d');
-	paintBerlin(g);
+	town.paint(g);
 
 	const sides = [
 		[0, 104],
@@ -167,7 +170,7 @@ function buildBackground() {
 	px(g, 436, 104, 36, 1, '#2a2535');
 	['BASS', 'UNITY', 'FREEDOM'].forEach((s, i) => textC(g, s, 454, 107 + i * 7, '#cfc8e6'));
 
-	controlPanel(g);
+	controlPanel(g, town.plant);
 	generatorAndExit(g);
 
 	// Concrete pillars with tags and stickers.
@@ -253,14 +256,14 @@ const PRESSURE: Pt = [400, 155];
 const BEACON: Pt = [415, 157];
 
 /** Left: the control panel, painted green-grey steel with four gauges, lamps and a knife switch. */
-function controlPanel(g: Ctx) {
+function controlPanel(g: Ctx, label: string) {
 	px(g, 4, 148, 96, 39, '#0a0810');
 	px(g, 6, 149, 92, 37, '#17131f');
 	px(g, 6, 149, 92, 1, '#2c2638');
 	px(g, 6, 149, 1, 37, '#221d2c');
 	px(g, 97, 149, 1, 37, '#0e0b14');
 	for (const x of [8, 95]) for (const y of [151, 183]) px(g, x, y, 1, 1, '#3e3650');
-	text(g, 'KRAFTWERK', 10, 152, '#6e5e3e');
+	text(g, label, 10, 152, '#6e5e3e');
 	px(g, 10, 158, 70, 1, '#0f0c16');
 	for (const [x, y] of GAUGES) {
 		disc(g, x, y, 7, '#0a0810');
@@ -388,7 +391,7 @@ const STEP_COLORS = [
 	['#4a4858', '#ffffff']
 ];
 
-function buildBooth() {
+function buildBooth(town: City) {
 	const [c, g] = canvas();
 	const R = rng(5);
 
@@ -500,32 +503,23 @@ function buildBooth() {
 	paper(141, 148, 14, 18, '#1a5a4a');
 	paper(325, 162, 14, 17, '#2a4a8a');
 
-	// Berlin sticker.
+	// The city sticker: its landmark over its name.
 	const ink = '#14111c';
-	px(g, 162, 147, 26, 30, '#e8e4f0');
-	px(g, 174, 151, 2, 16, ink);
-	disc(g, 175, 156, 2, ink);
-	px(g, 175, 148, 1, 4, ink);
-	for (const [x, h] of [
-		[164, 4],
-		[168, 7],
-		[178, 6],
-		[182, 3]
-	])
-		px(g, x, 167 - h, 4, h, ink);
-	px(g, 163, 167, 24, 1, ink);
-	text(g, 'BERLIN', 164, 170, ink);
+	px(g, 158, 146, 35, 31, '#e8e4f0');
+	town.sticker(g, 175, 148, ink);
+	textC(g, town.name, 176, 170, ink);
 
 	// NO PHOTO sticker: a crossed-out camera.
-	disc(g, 191, 178, 4, '#e8e4f0');
+	const [nx, ny] = [197, 179];
+	disc(g, nx, ny, 4, '#e8e4f0');
 	for (let a = 0; a < 40; a++) {
 		const t = (a / 40) * Math.PI * 2;
-		px(g, 191 + Math.cos(t) * 4, 178 + Math.sin(t) * 4, 1, 1, '#d8263f');
+		px(g, nx + Math.cos(t) * 4, ny + Math.sin(t) * 4, 1, 1, '#d8263f');
 	}
-	px(g, 189, 177, 5, 3, ink);
-	px(g, 190, 176, 2, 1, ink);
-	px(g, 191, 178, 1, 1, '#e8e4f0');
-	line(g, 188, 175, 194, 181, 1, '#d8263f');
+	px(g, nx - 2, ny - 1, 5, 3, ink);
+	px(g, nx - 1, ny - 2, 2, 1, ink);
+	px(g, nx, ny, 1, 1, '#e8e4f0');
+	line(g, nx - 3, ny - 3, nx + 3, ny + 3, 1, '#d8263f');
 
 	// Graffiti.
 	const chalk = '#e2dcf2';
@@ -628,12 +622,15 @@ interface Frame {
 
 export class ClubScene {
 	private g: Ctx;
-	private bg = buildBackground();
+	private town!: City;
+	private bg!: HTMLCanvasElement;
+	private booth!: HTMLCanvasElement;
+	private banL!: HTMLCanvasElement;
+	private banR!: HTMLCanvasElement;
+	/** Lights out while the club moves to another city, 1 = black. */
+	private blackout = 0;
 	private frame = windowFrame();
-	private booth = buildBooth();
 	private fog = buildFog();
-	private banL = buildBanner(['TECHNO', 'PEOPLE', 'BETTER', 'HUMANS'], 'smile');
-	private banR = buildBanner(['BERLIN', 'NEVER', 'SLEEPS'], 'crown');
 	private crowd = new Crowd(W, H);
 	private balconies: { x: number; hand: number; ph: number }[][][];
 	private sparks: { lon: number; y: number; c: number }[];
@@ -650,6 +647,7 @@ export class ClubScene {
 		cv.width = W;
 		cv.height = H;
 		this.g = cv.getContext('2d')!;
+		this.moveTo(city('berlin'));
 		const R = rng(42);
 		this.balconies = TIERS.map(() =>
 			[
@@ -670,7 +668,20 @@ export class ClubScene {
 		}));
 	}
 
+	/** Rebuilds everything that belongs to a city: the view, the walls, the booth sticker, the banners. */
+	private moveTo(town: City) {
+		this.town = town;
+		this.bg = buildBackground(town);
+		this.booth = buildBooth(town);
+		this.banL = buildBanner(town.banners[0], 'smile');
+		this.banR = buildBanner(town.banners[1], 'crown');
+	}
+
 	render(i: SceneInput, now: number) {
+		if (i.stage !== this.town.id) {
+			this.moveTo(city(i.stage));
+			this.blackout = i.reducedMotion ? 0 : 1;
+		}
 		const dt = this.last ? Math.min(0.05, (now - this.last) / 1000) : 0;
 		this.last = now;
 		this.t += dt;
@@ -707,7 +718,7 @@ export class ClubScene {
 		g.globalCompositeOperation = 'source-over';
 		g.globalAlpha = 1;
 		g.drawImage(this.bg, 0, 0);
-		berlinLive(g, this.t, i.cycle, i.live);
+		this.town.live(g, this.t, i.cycle, i.live);
 		g.drawImage(this.frame, 0, 0);
 		this.room(f);
 		this.balconyCrowd(f);
@@ -832,8 +843,9 @@ export class ClubScene {
 		const g = this.g;
 		const flicker = hash(Math.floor(this.t * 12), 9) > 0.93 ? 0.3 : 1;
 		const lit = i.live ? 0.25 + 0.75 * E.vox : 0.12;
-		this.neon(['BERLIN', 'BRENNT', 'BESSER'], 52, 62, PINK, lit * flicker, 1);
-		this.neon(['ALTE', 'MAUERN', 'NEUE', 'FREIHEIT'], 428, 58, CYAN, lit, 1);
+		const [left, right] = this.town.neon;
+		this.neon(left.lines, 52, 62, left.color, lit * flicker, 1);
+		this.neon(right.lines, 428, 58, right.color, lit, 1);
 
 		const sway = Math.round(Math.sin(this.t * 0.8) * 0.7);
 		g.drawImage(this.banL, 101 + sway, 22);
@@ -1319,6 +1331,11 @@ export class ClubScene {
 	private effects(f: Frame) {
 		const { i } = f;
 		const g = this.g;
+		if (this.blackout > 0) {
+			g.fillStyle = `rgba(0,0,0,${Math.min(1, this.blackout * 1.4)})`;
+			g.fillRect(0, 0, W, H);
+			this.blackout = Math.max(0, this.blackout - f.dt * 1.6);
+		}
 		if (!i.live) {
 			g.fillStyle = 'rgba(4,3,9,.4)';
 			g.fillRect(0, 0, W, H);

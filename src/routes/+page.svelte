@@ -2,10 +2,31 @@
 	import Club from '#lib/components/Club.svelte';
 	import Controls from '#lib/components/Controls.svelte';
 	import Queue from '#lib/components/Queue.svelte';
+	import { isStage, type StageId } from '#lib/club/cities/index.js';
 	import { DjBrain } from '#lib/dj/brain.svelte.js';
 	import { GENRE_COLORS } from '#lib/dj/genres.js';
 
 	const dj = new DjBrain();
+
+	/** Which city the club is in; remembered in this browser only. */
+	const STAGE_KEY = 'ravebot:stage';
+	let stage = $state<StageId>('berlin');
+	$effect.pre(() => {
+		try {
+			const saved = localStorage.getItem(STAGE_KEY);
+			if (isStage(saved)) stage = saved;
+		} catch {
+			// Storage can be blocked; Berlin it is.
+		}
+	});
+	function setStage(id: StageId) {
+		stage = id;
+		try {
+			localStorage.setItem(STAGE_KEY, id);
+		} catch {
+			// Not remembered, still switched.
+		}
+	}
 
 	$effect(() => () => dj.stopSet());
 </script>
@@ -14,7 +35,7 @@
 	<title>RaveBot — the AI DJ that never sleeps</title>
 	<meta
 		name="description"
-		content="A pixel robot DJ in a Berlin warehouse that live-codes techno in Strudel with an LLM and mixes it seamlessly."
+		content="A pixel robot DJ in a club in Berlin, Warsaw or Paris that live-codes techno in Strudel with an LLM and mixes it seamlessly."
 	/>
 </svelte:head>
 
@@ -28,8 +49,8 @@
 				>
 			</p>
 		</header>
-		<Club {dj} />
-		<Controls {dj} />
+		<Club {dj} {stage} />
+		<Controls {dj} {stage} onstage={setStage} />
 		<Queue {dj} />
 	</div>
 
