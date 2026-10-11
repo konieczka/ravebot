@@ -43,8 +43,9 @@ const TONAL = new Set<LayerName>(['bass', 'synth', 'vox']);
  * seed (they share a key); the drums are mixed and matched.
  */
 export function fallbackTrack(genre: GenreId, previous?: Layers): Track {
-	const own = genreById(genre).seeds;
-	const others = GENRES.flatMap((g) => g.seeds);
+	const { seeds: own, bpm } = genreById(genre);
+	// Only borrow from genres at a similar tempo: psy hats at a French house tempo sound wrong.
+	const others = GENRES.filter((g) => Math.abs(g.bpm - bpm) <= 8).flatMap((g) => g.seeds);
 	const fresh = own.filter((s) => s.layers.bass !== previous?.bass);
 	const tonal = pick(fresh.length ? fresh : own);
 	const layers = {} as Layers;
@@ -53,7 +54,7 @@ export function fallbackTrack(genre: GenreId, previous?: Layers): Track {
 			layers[layer] = tonal.layers[layer];
 			continue;
 		}
-		// Drums occasionally borrow from other genres for variety.
+		// Drums occasionally borrow from neighbouring genres for variety.
 		const pool = (layer === 'hats' || layer === 'perc') && Math.random() < 0.25 ? others : own;
 		let candidate = pick(pool).layers[layer];
 		if (previous && candidate === previous[layer] && pool.length > 1)

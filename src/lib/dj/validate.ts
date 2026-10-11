@@ -44,7 +44,7 @@ const METHODS = new Set(
 		'decay sustain attack release room size delay delaytime delayfeedback speed legato clip vowel phaser ' +
 		'fast slow rev ply degradeBy sometimesBy sometimes rarely often every firstOf lastOf off jux struct ' +
 		'mask range rangex segment add sub mul late early euclid swingBy chop iter palindrome hurry linger ' +
-		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo'
+		'chunk superimpose layer lpenv lpattack lpa lpdecay lpd ftype penv pdecay fm fmh echo vib vibmod phaserdepth'
 	).split(' ')
 );
 
@@ -177,13 +177,16 @@ export const VOX = new Set([
 	'bleep'
 ]);
 
+/** Rave samples that also work as a lead in the synth layer (hoover riffs, chord stabs). */
+const SYNTH_SAMPLES = new Set(['hoover', 'stab']);
+
 /** Which sounds each layer may use, so the mixer's per-layer blends stay meaningful. */
 const ROLE_SOUNDS: Record<LayerName, (name: string) => boolean> = {
 	kick: (n) => n === 'bd',
 	hats: (n) => ['hh', 'oh', 'rd', 'cr', 'sh'].includes(n),
 	perc: (n) => DRUMS.has(n) && n !== 'bd',
 	bass: (n) => SYNTHS.has(n),
-	synth: (n) => SYNTHS.has(n) || NOISE.has(n),
+	synth: (n) => SYNTHS.has(n) || NOISE.has(n) || SYNTH_SAMPLES.has(n),
 	vox: (n) => VOX.has(n) || SYNTHS.has(n) || NOISE.has(n)
 };
 
